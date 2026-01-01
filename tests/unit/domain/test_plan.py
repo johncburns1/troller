@@ -7,7 +7,7 @@ import pytest
 from troller.domain.models.plan import Plan, PlanStep
 
 
-def test_plan_step_creation_with_required_fields():
+def test_plan_step_creation_with_required_fields() -> None:
     """Create a PlanStep with only required fields."""
     step = PlanStep(
         id="step-1",
@@ -22,7 +22,7 @@ def test_plan_step_creation_with_required_fields():
     assert step.estimated_complexity is None
 
 
-def test_plan_step_creation_with_all_fields():
+def test_plan_step_creation_with_all_fields() -> None:
     """Create a PlanStep with all optional fields."""
     step = PlanStep(
         id="step-1",
@@ -39,7 +39,7 @@ def test_plan_step_creation_with_all_fields():
     assert step.estimated_complexity == "moderate"
 
 
-def test_plan_creation_with_required_fields():
+def test_plan_creation_with_required_fields() -> None:
     """Create a Plan with only required fields."""
     created_at = datetime.now(timezone.utc)
     steps = [
@@ -63,7 +63,7 @@ def test_plan_creation_with_required_fields():
     assert plan.metadata == {}
 
 
-def test_plan_creation_with_all_fields():
+def test_plan_creation_with_all_fields() -> None:
     """Create a Plan with all optional fields."""
     created_at = datetime.now(timezone.utc)
     steps = [
@@ -94,7 +94,7 @@ def test_plan_creation_with_all_fields():
     assert plan.metadata == {"issue_number": 42, "repo": "test/repo"}
 
 
-def test_plan_step_immutability():
+def test_plan_step_immutability() -> None:
     """Verify PlanStep instances are immutable."""
     step = PlanStep(
         id="step-1",
@@ -103,10 +103,10 @@ def test_plan_step_immutability():
     )
 
     with pytest.raises(AttributeError):
-        step.completed = True  # type: ignore
+        step.completed = True  # type: ignore[misc]
 
 
-def test_plan_immutability():
+def test_plan_immutability() -> None:
     """Verify Plan instances are immutable."""
     plan = Plan(
         summary="Test plan",
@@ -116,10 +116,10 @@ def test_plan_immutability():
     )
 
     with pytest.raises(AttributeError):
-        plan.summary = "Changed"  # type: ignore
+        plan.summary = "Changed"  # type: ignore[misc]
 
 
-def test_plan_step_complexity_values():
+def test_plan_step_complexity_values() -> None:
     """Verify PlanStep accepts valid complexity values."""
     valid_complexities = ["simple", "moderate", "complex"]
 
@@ -128,6 +128,6 @@ def test_plan_step_complexity_values():
             id="step-1",
             description="Test",
             completed=False,
-            estimated_complexity=complexity,  # type: ignore
+            estimated_complexity=complexity,  # type: ignore[arg-type]
         )
         assert step.estimated_complexity == complexity

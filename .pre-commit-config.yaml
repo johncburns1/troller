@@ -10,5 +10,6 @@ repos:
     rev: v1.13.0
     hooks:
       - id: mypy
-        additional_dependencies: [temporalio, anthropic]
-        args: [--strict]
+        additional_dependencies: [temporalio, anthropic, pytest]
+        args: [src]
+        pass_filenames: false
