@@ -85,7 +85,7 @@ Invoke skill: `engineering:python-engineering`
 
 ## Project Structure
 
-```
+```text
 troller/
 ├── src/
 │   └── troller/

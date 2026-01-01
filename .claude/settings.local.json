@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh label create:*)",
+      "Bash(uv run ruff check:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(uv run pytest:*)"
+    ]
+  }
+}
