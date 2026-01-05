@@ -14,7 +14,10 @@ with workflow.unsafe.imports_passed_through():
         FetchIssueInput,
         fetch_issue,
     )
-    from troller.worker.activities.planning_activities import run_planning_agent
+    from troller.worker.activities.planning_activities import (
+        PlanningInput,
+        run_planning_agent,
+    )
     from troller.worker.workflows.data_structures import Issue, WorkflowInput
 
 
@@ -60,11 +63,18 @@ class IssueResolutionWorkflow:
             ),
         )
 
-        # Run planning agent (may take a few minutes)
+        # Run planning agent (may take a few minutes due to repo cloning and exploration)
         self._plan = await workflow.execute_activity(
             run_planning_agent,
-            args=[self._issue],
-            start_to_close_timeout=timedelta(minutes=5),
+            PlanningInput(
+                issue=self._issue,
+                repo_owner=input.repo_owner,
+                repo_name=input.repo_name,
+                target_branch=input.target_branch,
+            ),
+            start_to_close_timeout=timedelta(
+                minutes=10
+            ),  # Increased for cloning + exploration
             retry_policy=RetryPolicy(
                 maximum_attempts=3,
                 initial_interval=timedelta(seconds=5),

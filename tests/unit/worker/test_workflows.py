@@ -4,7 +4,7 @@ Tests use Temporal's testing framework to verify workflow behavior.
 """
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from github.Issue import Issue as GithubIssue
@@ -13,7 +13,10 @@ from temporalio.worker import Worker
 
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.github_activities import FetchIssueInput, fetch_issue
-from troller.worker.activities.planning_activities import run_planning_agent
+from troller.worker.activities.planning_activities import (
+    PlanningInput,
+    run_planning_agent,
+)
 from troller.worker.workflows.data_structures import Issue, WorkflowInput
 from troller.worker.workflows.issue_resolution import IssueResolutionWorkflow
 
@@ -59,7 +62,7 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                 created_at=datetime.now(),
                 metadata={"issue_number": 123},
             )
-            mock_claude_client.generate_plan.return_value = expected_plan
+            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -131,7 +134,7 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                 created_at=datetime.now(),
                 metadata={},
             )
-            mock_claude_client.generate_plan.return_value = expected_plan
+            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -200,7 +203,7 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
                 created_at=datetime.now(),
                 metadata={},
             )
-            mock_claude_client.generate_plan.return_value = expected_plan
+            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -269,7 +272,7 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                 created_at=datetime.now(),
                 metadata={},
             )
-            mock_claude_client.generate_plan.return_value = expected_plan
+            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -374,7 +377,7 @@ async def test_run_planning_agent_activity_returns_plan() -> None:
                 created_at=datetime.now(),
                 metadata={"issue_number": 123},
             )
-            mock_client.generate_plan.return_value = expected_plan
+            mock_client.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Test
             issue = Issue(
@@ -384,8 +387,13 @@ async def test_run_planning_agent_activity_returns_plan() -> None:
                 labels=["bug"],
                 url="https://github.com/test/repo/issues/123",
             )
+            planning_input = PlanningInput(
+                issue=issue,
+                repo_owner="test",
+                repo_name="repo",
+            )
 
-            result = await run_planning_agent(issue)
+            result = await run_planning_agent(planning_input)
 
             assert isinstance(result, Plan)
             assert result.summary != ""

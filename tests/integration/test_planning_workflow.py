@@ -5,7 +5,7 @@ Tests the full stack: workflow → activities → GitHub API → Claude API → 
 
 import os
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from github.Issue import Issue as GithubIssue
@@ -137,7 +137,7 @@ async def test_planning_workflow_end_to_end(
             # Setup Claude mock
             mock_claude_client = MagicMock()
             mock_claude_client_class.return_value = mock_claude_client
-            mock_claude_client.generate_plan.return_value = expected_plan
+            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run integration test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -188,12 +188,15 @@ async def test_planning_workflow_end_to_end(
                         owner="test-org", repo="test-repo", issue_number=42
                     )
 
-                    # Verify Claude client was called with issue data
-                    mock_claude_client.generate_plan.assert_called_once()
+                    # Verify Claude client was called with issue data and repo info
+                    mock_claude_client.generate_plan.assert_awaited_once()
                     call_kwargs = mock_claude_client.generate_plan.call_args.kwargs
                     assert call_kwargs["issue_title"] == mock_github_issue.title
                     assert call_kwargs["issue_body"] == mock_github_issue.body
                     assert call_kwargs["issue_number"] == 42
+                    assert call_kwargs["repo_owner"] == "test-org"
+                    assert call_kwargs["repo_name"] == "test-repo"
+                    assert call_kwargs["target_branch"] == "main"
 
 
 @pytest.mark.asyncio
@@ -224,7 +227,7 @@ async def test_planning_workflow_validates_plan_metadata(
 
             mock_claude_client = MagicMock()
             mock_claude_client_class.return_value = mock_claude_client
-            mock_claude_client.generate_plan.return_value = expected_plan
+            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -282,7 +285,7 @@ async def test_planning_workflow_validates_step_structure(
 
             mock_claude_client = MagicMock()
             mock_claude_client_class.return_value = mock_claude_client
-            mock_claude_client.generate_plan.return_value = expected_plan
+            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -358,7 +361,7 @@ async def test_planning_workflow_with_optional_fields(
 
             mock_claude_client = MagicMock()
             mock_claude_client_class.return_value = mock_claude_client
-            mock_claude_client.generate_plan.return_value = expected_plan
+            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:

@@ -3,16 +3,14 @@
 Activities for fetching and interacting with GitHub issues.
 """
 
-from dataclasses import dataclass
-
+from pydantic import BaseModel, ConfigDict, Field
 from temporalio import activity
 
 from troller.worker.adapters.github_client import GitHubClient
 from troller.worker.workflows.data_structures import Issue
 
 
-@dataclass(frozen=True)
-class FetchIssueInput:
+class FetchIssueInput(BaseModel):
     """Input parameters for fetch_issue activity.
 
     Attributes:
@@ -21,9 +19,11 @@ class FetchIssueInput:
         issue_number: GitHub issue number to fetch.
     """
 
-    repo_owner: str
-    repo_name: str
-    issue_number: int
+    model_config = ConfigDict(frozen=True)
+
+    repo_owner: str = Field(..., description="GitHub repository owner")
+    repo_name: str = Field(..., description="GitHub repository name")
+    issue_number: int = Field(..., description="GitHub issue number to fetch", gt=0)
 
 
 @activity.defn

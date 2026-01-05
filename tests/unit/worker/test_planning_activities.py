@@ -2,12 +2,15 @@
 
 import os
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from troller.domain.models.plan import Plan, PlanStep
-from troller.worker.activities.planning_activities import run_planning_agent
+from troller.worker.activities.planning_activities import (
+    PlanningInput,
+    run_planning_agent,
+)
 from troller.worker.workflows.data_structures import Issue
 
 
@@ -42,7 +45,7 @@ class TestRunPlanningAgent:
                     technical_approach="Use existing patterns",
                     testing_strategy="Write unit tests",
                 )
-                mock_client.generate_plan.return_value = expected_plan
+                mock_client.generate_plan = AsyncMock(return_value=expected_plan)
 
                 # Test
                 issue = Issue(
@@ -52,7 +55,12 @@ class TestRunPlanningAgent:
                     labels=["enhancement"],
                     url="https://github.com/owner/repo/issues/42",
                 )
-                result = await run_planning_agent(issue)
+                planning_input = PlanningInput(
+                    issue=issue,
+                    repo_owner="owner",
+                    repo_name="repo",
+                )
+                result = await run_planning_agent(planning_input)
 
                 # Verify
                 assert isinstance(result, Plan)
@@ -75,7 +83,7 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={},
                 )
-                mock_client.generate_plan.return_value = mock_plan
+                mock_client.generate_plan = AsyncMock(return_value=mock_plan)
 
                 # Test
                 issue = Issue(
@@ -85,13 +93,22 @@ class TestRunPlanningAgent:
                     labels=["bug", "priority:high"],
                     url="https://github.com/test/test/issues/123",
                 )
-                await run_planning_agent(issue)
+                planning_input = PlanningInput(
+                    issue=issue,
+                    repo_owner="testowner",
+                    repo_name="testrepo",
+                    target_branch="develop",
+                )
+                await run_planning_agent(planning_input)
 
                 # Verify
-                mock_client.generate_plan.assert_called_once_with(
+                mock_client.generate_plan.assert_awaited_once_with(
                     issue_title="Fix authentication bug",
                     issue_body="Users cannot log in with OAuth",
                     issue_number=123,
+                    repo_owner="testowner",
+                    repo_name="testrepo",
+                    target_branch="develop",
                 )
 
     @pytest.mark.asyncio
@@ -111,7 +128,7 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={},
                 )
-                mock_client.generate_plan.return_value = mock_plan
+                mock_client.generate_plan = AsyncMock(return_value=mock_plan)
 
                 # Test
                 issue = Issue(
@@ -121,14 +138,22 @@ class TestRunPlanningAgent:
                     labels=[],
                     url="https://github.com/owner/repo/issues/1",
                 )
-                result = await run_planning_agent(issue)
+                planning_input = PlanningInput(
+                    issue=issue,
+                    repo_owner="owner",
+                    repo_name="repo",
+                )
+                result = await run_planning_agent(planning_input)
 
                 # Verify - should still work with empty description
                 assert isinstance(result, Plan)
-                mock_client.generate_plan.assert_called_once_with(
+                mock_client.generate_plan.assert_awaited_once_with(
                     issue_title="Issue with no description",
                     issue_body="",
                     issue_number=1,
+                    repo_owner="owner",
+                    repo_name="repo",
+                    target_branch=None,
                 )
 
     @pytest.mark.asyncio
@@ -173,7 +198,7 @@ class TestRunPlanningAgent:
                     technical_approach="Use hexagonal architecture pattern",
                     testing_strategy="TDD with pytest and mocks",
                 )
-                mock_client.generate_plan.return_value = expected_plan
+                mock_client.generate_plan = AsyncMock(return_value=expected_plan)
 
                 # Test
                 issue = Issue(
@@ -183,7 +208,12 @@ class TestRunPlanningAgent:
                     labels=["refactoring"],
                     url="https://github.com/owner/repo/issues/999",
                 )
-                result = await run_planning_agent(issue)
+                planning_input = PlanningInput(
+                    issue=issue,
+                    repo_owner="owner",
+                    repo_name="repo",
+                )
+                result = await run_planning_agent(planning_input)
 
                 # Verify all fields preserved
                 assert result.summary == "Comprehensive implementation plan"
