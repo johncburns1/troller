@@ -4,7 +4,9 @@
       "Bash(gh label create:*)",
       "Bash(uv run ruff check:*)",
       "Bash(uv run mypy:*)",
-      "Bash(uv run pytest:*)"
+      "Bash(uv run pytest:*)",
+      "Bash(gh issue view:*)",
+      "Skill(engineering:engineering-standards)"
     ]
   }
 }
