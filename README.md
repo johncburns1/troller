@@ -9,7 +9,9 @@ Autonomous GitHub issue resolution system using Temporal workflows and multi-age
 uv sync
 
 # Run tests
-uv run pytest
+uv run pytest                     # Run all tests
+uv run pytest tests/unit          # Run unit tests only
+uv run pytest tests/integration   # Run integration tests only
 
 # Run linting and type checking
 uv run ruff check --fix
@@ -56,6 +58,46 @@ This project follows **hexagonal architecture** (ports and adapters):
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design decisions.
 See [PRODUCT.md](PRODUCT.md) for product vision and requirements.
+
+## Testing
+
+This project has two types of tests:
+
+### Unit Tests
+
+Fast, isolated tests that mock external dependencies. Located in `tests/unit/`.
+
+```bash
+# Run all unit tests
+uv run pytest tests/unit
+
+# Run specific test file
+uv run pytest tests/unit/worker/test_workflows.py
+
+# Run with coverage
+uv run pytest tests/unit --cov=src
+```
+
+### Integration Tests
+
+End-to-end tests that validate the full stack integration. Located in `tests/integration/`.
+
+```bash
+# Run all integration tests
+uv run pytest tests/integration
+
+# Run planning workflow integration tests
+uv run pytest tests/integration/test_planning_workflow.py
+
+# Run with verbose output
+uv run pytest tests/integration -v
+```
+
+Integration tests use Temporal's testing framework and mocked external APIs (GitHub, Claude) to validate:
+- Complete workflow execution from trigger to completion
+- Proper activity coordination and data flow
+- Output data structure and validation
+- Error handling and retry logic
 
 ## Development
 
