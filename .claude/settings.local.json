@@ -6,7 +6,8 @@
       "Bash(uv run mypy:*)",
       "Bash(uv run pytest:*)",
       "Bash(gh issue view:*)",
-      "Skill(engineering:engineering-standards)"
+      "Skill(engineering:engineering-standards)",
+      "Skill(engineering:python-engineering)"
     ]
   }
 }
