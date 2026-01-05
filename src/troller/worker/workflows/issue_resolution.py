@@ -10,8 +10,11 @@ from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
     from troller.domain.models.plan import Plan
-    from troller.worker.activities.agent_activities import run_planning_agent
-    from troller.worker.activities.issue_activities import fetch_issue
+    from troller.worker.activities.github_activities import (
+        FetchIssueInput,
+        fetch_issue,
+    )
+    from troller.worker.activities.planning_activities import run_planning_agent
     from troller.worker.workflows.data_structures import Issue, WorkflowInput
 
 
@@ -44,7 +47,11 @@ class IssueResolutionWorkflow:
         # Fetch issue from GitHub
         self._issue = await workflow.execute_activity(
             fetch_issue,
-            args=[input.repo_owner, input.repo_name, input.issue_number],
+            FetchIssueInput(
+                repo_owner=input.repo_owner,
+                repo_name=input.repo_name,
+                issue_number=input.issue_number,
+            ),
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=RetryPolicy(
                 maximum_attempts=3,
