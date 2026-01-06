@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 from anthropic import Anthropic
-from claude_agent_sdk import ClaudeAgentOptions, query  # type: ignore[import-not-found]
+from claude_agent_sdk import ClaudeAgentOptions, query
 from pydantic import BaseModel, Field
 
 from troller.domain.models.plan import Plan, PlanStep

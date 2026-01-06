@@ -10,6 +10,6 @@ repos:
     rev: v1.13.0
     hooks:
       - id: mypy
-        additional_dependencies: [temporalio, anthropic, pytest, PyGithub]
+        additional_dependencies: [temporalio, anthropic, pytest, PyGithub, pydantic-settings, claude-agent-sdk]
         args: [src]
         pass_filenames: false
