@@ -24,6 +24,77 @@ uv run pytest
 uv run ruff check --fix && uv run ruff format && uv run mypy src
 ```
 
+## Configuration
+
+Troller uses environment variables for configuration. Create a `.env` file from the template:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` to customize your configuration:
+
+```bash
+# Temporal server
+TEMPORAL_ADDRESS=localhost:7233
+TEMPORAL_TASK_QUEUE=troller-task-queue
+
+# GitHub (optional for public repos)
+GITHUB_TOKEN=your_token_here
+
+# Logging
+LOG_LEVEL=INFO
+```
+
+Configuration priority (highest to lowest):
+1. Command-line arguments
+2. Environment variables
+3. `.env` file
+4. Default values
+
+## Running the Worker
+
+Start a local Temporal dev server (in a separate terminal):
+
+```bash
+temporal server start-dev
+```
+
+Start the Troller worker:
+
+```bash
+uv run python src/troller/worker/run_worker.py
+```
+
+Optional arguments:
+- `--temporal-address`: Temporal server address
+- `--task-queue`: Task queue name
+
+## Triggering Workflows
+
+Trigger an issue resolution workflow:
+
+```bash
+uv run python cli.py \
+  --repo-owner <owner> \
+  --repo-name <repo> \
+  --issue-number <number>
+```
+
+Example:
+
+```bash
+uv run python cli.py \
+  --repo-owner johncburns1 \
+  --repo-name troller \
+  --issue-number 7
+```
+
+Optional arguments:
+- `--target-branch`: Target branch for implementation
+- `--temporal-address`: Temporal server address
+- `--task-queue`: Task queue name
+
 ## Architecture
 
 Follows **hexagonal architecture** (ports and adapters):
