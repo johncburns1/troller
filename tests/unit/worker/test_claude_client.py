@@ -1,17 +1,16 @@
 """Unit tests for Claude API client adapter."""
 
 import os
-import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import BaseModel
 
-from troller.domain.models.plan import Plan
 from troller.worker.adapters.claude_client import ClaudeClient
 
 
 class TestClaudeClient:
-    """Test suite for ClaudeClient adapter."""
+    """Test suite for generic ClaudeClient adapter."""
 
     def test_init_stores_api_key_from_env(self) -> None:
         """ClaudeClient reads and stores ANTHROPIC_API_KEY from environment."""
@@ -29,305 +28,148 @@ class TestClaudeClient:
                 ClaudeClient()
 
     @pytest.mark.asyncio
-    async def test_generate_plan_clones_repository(self) -> None:
-        """generate_plan clones the target repository."""
+    async def test_query_yields_agent_sdk_messages(self) -> None:
+        """query() yields messages from Agent SDK query."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
-                "troller.worker.adapters.claude_client.subprocess.run"
-            ) as mock_run:
-                with patch("troller.worker.adapters.claude_client.query") as mock_query:
-                    with patch(
-                        "troller.worker.adapters.claude_client.Anthropic"
-                    ) as mock_anthropic_class:
-                        with patch(
-                            "troller.worker.adapters.claude_client.shutil.rmtree"
-                        ):
-                            # Mock successful git clone
-                            mock_run.return_value = MagicMock(returncode=0)
+                "troller.worker.adapters.claude_client.agent_query"
+            ) as mock_query:
+                # Mock Agent SDK query response
+                async def mock_query_response(*args, **kwargs):
+                    yield MagicMock(result="First message")
+                    yield MagicMock(result="Second message")
 
-                            # Mock agent SDK exploration phase
-                            async def mock_query_response(*args, **kwargs):
-                                yield MagicMock(
-                                    result="Architecture: hexagonal pattern"
-                                )
+                mock_query.side_effect = mock_query_response
 
-                            mock_query.side_effect = mock_query_response
+                client = ClaudeClient()
+                options = MagicMock()  # ClaudeAgentOptions mock
 
-                            # Mock Anthropic client for planning phase
-                            mock_anthropic = MagicMock()
-                            mock_anthropic_class.return_value = mock_anthropic
-                            mock_response = MagicMock()
-                            mock_response.content = [
-                                MagicMock(
-                                    text='{"summary": "Test", "steps": [], "technical_approach": null, "testing_strategy": null}'
-                                )
-                            ]
-                            mock_anthropic.messages.create.return_value = mock_response
+                # Collect yielded messages
+                messages = []
+                async for message in client.query("Test prompt", options):
+                    messages.append(message)
 
-                            client = ClaudeClient()
-                            await client.generate_plan(
-                                issue_title="Test",
-                                issue_body="Body",
-                                issue_number=1,
-                                repo_owner="testowner",
-                                repo_name="testrepo",
-                            )
+                # Verify messages were yielded
+                assert len(messages) == 2
+                assert messages[0].result == "First message"
+                assert messages[1].result == "Second message"
 
-                            # Verify git clone was called
-                            assert mock_run.called
-                            clone_call = mock_run.call_args_list[0]
-                            assert "git" in clone_call[0][0]
-                            assert "clone" in clone_call[0][0]
-                            assert (
-                                "https://github.com/testowner/testrepo.git"
-                                in clone_call[0][0]
-                            )
+                # Verify agent_query was called with correct parameters
+                mock_query.assert_called_once_with(
+                    prompt="Test prompt", options=options
+                )
 
     @pytest.mark.asyncio
-    async def test_generate_plan_cleans_up_repository(self) -> None:
-        """generate_plan removes cloned repository after completion."""
+    async def test_query_passes_options_to_agent_sdk(self) -> None:
+        """query() passes ClaudeAgentOptions to agent SDK."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
-                "troller.worker.adapters.claude_client.subprocess.run"
-            ) as mock_run:
-                with patch("troller.worker.adapters.claude_client.query") as mock_query:
-                    with patch(
-                        "troller.worker.adapters.claude_client.Anthropic"
-                    ) as mock_anthropic_class:
-                        with patch(
-                            "troller.worker.adapters.claude_client.shutil.rmtree"
-                        ) as mock_rmtree:
-                            mock_run.return_value = MagicMock(returncode=0)
+                "troller.worker.adapters.claude_client.agent_query"
+            ) as mock_query:
+                # Mock Agent SDK query response
+                async def mock_query_response(*args, **kwargs):
+                    yield MagicMock(result="Response")
 
-                            async def mock_query_response(*args, **kwargs):
-                                yield MagicMock(result="Architecture found")
+                mock_query.side_effect = mock_query_response
 
-                            # Mock Anthropic client for planning phase
-                            mock_anthropic = MagicMock()
-                            mock_anthropic_class.return_value = mock_anthropic
-                            mock_response = MagicMock()
-                            mock_response.content = [
-                                MagicMock(
-                                    text='{"summary": "Test", "steps": [], "technical_approach": null, "testing_strategy": null}'
-                                )
-                            ]
-                            mock_anthropic.messages.create.return_value = mock_response
+                client = ClaudeClient()
+                options = MagicMock(
+                    cwd="/test/path",
+                    allowed_tools=["Read", "Grep"],
+                    permission_mode="bypassPermissions",
+                )
 
-                            mock_query.side_effect = mock_query_response
+                # Execute query
+                async for _ in client.query("Analyze code", options):
+                    pass
 
-                            client = ClaudeClient()
-                            await client.generate_plan(
-                                issue_title="Test",
-                                issue_body="Body",
-                                issue_number=1,
-                                repo_owner="owner",
-                                repo_name="repo",
-                            )
-
-                            # Verify cleanup was called
-                            assert mock_rmtree.called
+                # Verify options were passed
+                call_kwargs = mock_query.call_args.kwargs
+                assert call_kwargs["options"] == options
 
     @pytest.mark.asyncio
-    async def test_generate_plan_cleans_up_on_failure(self) -> None:
-        """generate_plan removes cloned repository even if planning fails."""
+    async def test_structured_query_returns_validated_model(self) -> None:
+        """structured_query() returns Pydantic model validated from response."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
-                "troller.worker.adapters.claude_client.subprocess.run"
-            ) as mock_run:
-                with patch("troller.worker.adapters.claude_client.query") as mock_query:
-                    with patch(
-                        "troller.worker.adapters.claude_client.Anthropic"
-                    ) as mock_anthropic_class:
-                        with patch(
-                            "troller.worker.adapters.claude_client.shutil.rmtree"
-                        ) as mock_rmtree:
-                            # Successful clone
-                            mock_run.return_value = MagicMock(returncode=0)
+                "troller.worker.adapters.claude_client.Anthropic"
+            ) as mock_anthropic_class:
+                # Define test schema
+                class TestSchema(BaseModel):
+                    summary: str
+                    count: int
 
-                            # Agent query fails
-                            async def failing_query(*args, **kwargs):
-                                raise RuntimeError("Agent failed")
-                                yield  # Make it async generator
+                # Mock Anthropic client response
+                mock_anthropic = MagicMock()
+                mock_anthropic_class.return_value = mock_anthropic
+                mock_response = MagicMock()
+                mock_response.content = [
+                    MagicMock(text='{"summary": "Test summary", "count": 42}')
+                ]
+                mock_anthropic.messages.create.return_value = mock_response
 
-                            mock_query.side_effect = failing_query
+                client = ClaudeClient()
+                result = await client.structured_query("Generate test data", TestSchema)
 
-                            # Mock Anthropic (won't be reached due to failure)
-                            mock_anthropic = MagicMock()
-                            mock_anthropic_class.return_value = mock_anthropic
-
-                            client = ClaudeClient()
-
-                            with pytest.raises(RuntimeError, match="Agent failed"):
-                                await client.generate_plan(
-                                    issue_title="Test",
-                                    issue_body="Body",
-                                    issue_number=1,
-                                    repo_owner="owner",
-                                    repo_name="repo",
-                                )
-
-                            # Verify cleanup still happened
-                            assert mock_rmtree.called
+                # Verify result is validated Pydantic model
+                assert isinstance(result, TestSchema)
+                assert result.summary == "Test summary"
+                assert result.count == 42
 
     @pytest.mark.asyncio
-    async def test_generate_plan_returns_plan_with_codebase_context(self) -> None:
-        """generate_plan returns Plan with codebase analysis in metadata."""
+    async def test_structured_query_uses_json_schema(self) -> None:
+        """structured_query() configures API with JSON schema validation."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
-                "troller.worker.adapters.claude_client.subprocess.run"
-            ) as mock_run:
-                with patch("troller.worker.adapters.claude_client.query") as mock_query:
-                    with patch(
-                        "troller.worker.adapters.claude_client.Anthropic"
-                    ) as mock_anthropic_class:
-                        with patch(
-                            "troller.worker.adapters.claude_client.shutil.rmtree"
-                        ):
-                            mock_run.return_value = MagicMock(returncode=0)
+                "troller.worker.adapters.claude_client.Anthropic"
+            ) as mock_anthropic_class:
+                # Define test schema
+                class TestSchema(BaseModel):
+                    name: str
 
-                            async def mock_query_response(*args, **kwargs):
-                                yield MagicMock(result="Hexagonal architecture found")
+                # Mock Anthropic client response
+                mock_anthropic = MagicMock()
+                mock_anthropic_class.return_value = mock_anthropic
+                mock_response = MagicMock()
+                mock_response.content = [MagicMock(text='{"name": "test"}')]
+                mock_anthropic.messages.create.return_value = mock_response
 
-                            # Mock Anthropic client for planning phase
-                            mock_anthropic = MagicMock()
-                            mock_anthropic_class.return_value = mock_anthropic
-                            mock_response = MagicMock()
-                            mock_response.content = [
-                                MagicMock(
-                                    text='{"summary": "Implement feature", "steps": [{"id": "step-1", "description": "Add handler", "completed": false, "related_files": ["handler.py"], "estimated_complexity": "moderate"}], "technical_approach": "Use existing patterns", "testing_strategy": "Unit tests"}'
-                                )
-                            ]
-                            mock_anthropic.messages.create.return_value = mock_response
+                client = ClaudeClient()
+                await client.structured_query("Query", TestSchema, model="test-model")
 
-                            mock_query.side_effect = mock_query_response
+                # Verify messages.create was called with schema
+                create_call = mock_anthropic.messages.create.call_args
+                assert create_call.kwargs["model"] == "test-model"
+                assert create_call.kwargs["max_tokens"] == 4096
+                assert "response_format" in create_call.kwargs["extra_body"]
 
-                            client = ClaudeClient()
-                            plan = await client.generate_plan(
-                                issue_title="Add feature",
-                                issue_body="New feature needed",
-                                issue_number=42,
-                                repo_owner="owner",
-                                repo_name="repo",
-                            )
-
-                            # Verify plan structure
-                            assert isinstance(plan, Plan)
-                            assert plan.summary == "Implement feature"
-                            assert len(plan.steps) == 1
-                            assert plan.steps[0].id == "step-1"
-                            assert plan.steps[0].related_files == ["handler.py"]
-                            assert plan.metadata["issue_number"] == 42
-                            assert "codebase_analysis" in plan.metadata
-                            assert (
-                                "Hexagonal architecture"
-                                in plan.metadata["codebase_analysis"]
-                            )
+                # Verify schema configuration
+                response_format = create_call.kwargs["extra_body"]["response_format"]
+                assert response_format["type"] == "json_schema"
+                assert response_format["json_schema"]["strict"] is True
+                assert "schema" in response_format["json_schema"]
 
     @pytest.mark.asyncio
-    async def test_generate_plan_uses_agent_sdk_with_correct_options(self) -> None:
-        """generate_plan configures Agent SDK with correct working directory and tools."""
+    async def test_structured_query_defaults_to_sonnet_model(self) -> None:
+        """structured_query() uses Sonnet 4.5 by default."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
-                "troller.worker.adapters.claude_client.subprocess.run"
-            ) as mock_run:
-                with patch("troller.worker.adapters.claude_client.query") as mock_query:
-                    with patch(
-                        "troller.worker.adapters.claude_client.Anthropic"
-                    ) as mock_anthropic_class:
-                        with patch(
-                            "troller.worker.adapters.claude_client.shutil.rmtree"
-                        ):
-                            mock_run.return_value = MagicMock(returncode=0)
+                "troller.worker.adapters.claude_client.Anthropic"
+            ) as mock_anthropic_class:
+                # Define test schema
+                class TestSchema(BaseModel):
+                    value: str
 
-                            captured_options = []
+                # Mock Anthropic client response
+                mock_anthropic = MagicMock()
+                mock_anthropic_class.return_value = mock_anthropic
+                mock_response = MagicMock()
+                mock_response.content = [MagicMock(text='{"value": "test"}')]
+                mock_anthropic.messages.create.return_value = mock_response
 
-                            async def capture_options(*args, **kwargs):
-                                captured_options.append(kwargs.get("options"))
-                                yield MagicMock(result="Analysis")
+                client = ClaudeClient()
+                await client.structured_query("Query", TestSchema)  # No model specified
 
-                            mock_query.side_effect = capture_options
-
-                            # Mock Anthropic client for planning phase
-                            mock_anthropic = MagicMock()
-                            mock_anthropic_class.return_value = mock_anthropic
-                            mock_response = MagicMock()
-                            mock_response.content = [
-                                MagicMock(
-                                    text='{"summary": "Test", "steps": [], "technical_approach": null, "testing_strategy": null}'
-                                )
-                            ]
-                            mock_anthropic.messages.create.return_value = mock_response
-
-                            client = ClaudeClient()
-                            await client.generate_plan(
-                                issue_title="Test",
-                                issue_body="Body",
-                                issue_number=1,
-                                repo_owner="owner",
-                                repo_name="repo",
-                            )
-
-                            # Verify agent options
-                            assert len(captured_options) >= 1
-                            options = captured_options[0]
-                            assert options is not None
-                            assert "Read" in options.allowed_tools
-                            assert "Glob" in options.allowed_tools
-                            assert "Grep" in options.allowed_tools
-                            assert options.permission_mode == "bypassPermissions"
-
-    @pytest.mark.asyncio
-    async def test_generate_plan_tries_master_if_main_fails(self) -> None:
-        """generate_plan tries master branch if main branch doesn't exist."""
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
-            with patch(
-                "troller.worker.adapters.claude_client.subprocess.run"
-            ) as mock_run:
-                with patch("troller.worker.adapters.claude_client.query") as mock_query:
-                    with patch(
-                        "troller.worker.adapters.claude_client.Anthropic"
-                    ) as mock_anthropic_class:
-                        with patch(
-                            "troller.worker.adapters.claude_client.shutil.rmtree"
-                        ):
-                            # First call (main branch) raises exception, second call (master) succeeds
-                            def run_side_effect(*args, **kwargs):
-                                """Mock subprocess.run to fail on main, succeed on master."""
-                                if "main" in args[0]:
-                                    raise subprocess.CalledProcessError(
-                                        1, "git", stderr="branch not found"
-                                    )
-                                # master branch succeeds
-                                return MagicMock(returncode=0)
-
-                            mock_run.side_effect = run_side_effect
-
-                            async def mock_query_response(*args, **kwargs):
-                                yield MagicMock(result="Analysis")
-
-                            mock_query.side_effect = mock_query_response
-
-                            # Mock Anthropic client for planning phase
-                            mock_anthropic = MagicMock()
-                            mock_anthropic_class.return_value = mock_anthropic
-                            mock_response = MagicMock()
-                            mock_response.content = [
-                                MagicMock(
-                                    text='{"summary": "Test", "steps": [], "technical_approach": null, "testing_strategy": null}'
-                                )
-                            ]
-                            mock_anthropic.messages.create.return_value = mock_response
-
-                            client = ClaudeClient()
-                            # This should not raise an error
-                            plan = await client.generate_plan(
-                                issue_title="Test",
-                                issue_body="Body",
-                                issue_number=1,
-                                repo_owner="owner",
-                                repo_name="repo",
-                            )
-
-                            # Verify both main and master were tried
-                            assert mock_run.call_count == 2
-                            assert isinstance(plan, Plan)
+                # Verify default model
+                create_call = mock_anthropic.messages.create.call_args
+                assert create_call.kwargs["model"] == "claude-sonnet-4-5-20250929"

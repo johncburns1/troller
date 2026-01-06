@@ -22,11 +22,11 @@ class TestRunPlanningAgent:
         """run_planning_agent returns Plan domain object."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
-                "troller.worker.activities.planning_activities.ClaudeClient"
-            ) as mock_client_class:
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_service_class:
                 # Setup mock
-                mock_client = MagicMock()
-                mock_client_class.return_value = mock_client
+                mock_service = MagicMock()
+                mock_service_class.return_value = mock_service
 
                 # Mock plan
                 expected_plan = Plan(
@@ -45,7 +45,7 @@ class TestRunPlanningAgent:
                     technical_approach="Use existing patterns",
                     testing_strategy="Write unit tests",
                 )
-                mock_client.generate_plan = AsyncMock(return_value=expected_plan)
+                mock_service.generate_plan = AsyncMock(return_value=expected_plan)
 
                 # Test
                 issue = Issue(
@@ -67,15 +67,15 @@ class TestRunPlanningAgent:
                 assert result == expected_plan
 
     @pytest.mark.asyncio
-    async def test_run_planning_agent_calls_client_with_issue_details(self) -> None:
-        """run_planning_agent calls ClaudeClient.generate_plan with issue details."""
+    async def test_run_planning_agent_calls_service_with_issue_details(self) -> None:
+        """run_planning_agent calls PlanningService.generate_plan with issue details."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
-                "troller.worker.activities.planning_activities.ClaudeClient"
-            ) as mock_client_class:
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_service_class:
                 # Setup mock
-                mock_client = MagicMock()
-                mock_client_class.return_value = mock_client
+                mock_service = MagicMock()
+                mock_service_class.return_value = mock_service
 
                 mock_plan = Plan(
                     summary="Plan",
@@ -83,7 +83,7 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={},
                 )
-                mock_client.generate_plan = AsyncMock(return_value=mock_plan)
+                mock_service.generate_plan = AsyncMock(return_value=mock_plan)
 
                 # Test
                 issue = Issue(
@@ -102,7 +102,7 @@ class TestRunPlanningAgent:
                 await run_planning_agent(planning_input)
 
                 # Verify
-                mock_client.generate_plan.assert_awaited_once_with(
+                mock_service.generate_plan.assert_awaited_once_with(
                     issue_title="Fix authentication bug",
                     issue_body="Users cannot log in with OAuth",
                     issue_number=123,
@@ -116,11 +116,11 @@ class TestRunPlanningAgent:
         """run_planning_agent handles issues with empty descriptions."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
-                "troller.worker.activities.planning_activities.ClaudeClient"
-            ) as mock_client_class:
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_service_class:
                 # Setup mock
-                mock_client = MagicMock()
-                mock_client_class.return_value = mock_client
+                mock_service = MagicMock()
+                mock_service_class.return_value = mock_service
 
                 mock_plan = Plan(
                     summary="Plan",
@@ -128,7 +128,7 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={},
                 )
-                mock_client.generate_plan = AsyncMock(return_value=mock_plan)
+                mock_service.generate_plan = AsyncMock(return_value=mock_plan)
 
                 # Test
                 issue = Issue(
@@ -147,7 +147,7 @@ class TestRunPlanningAgent:
 
                 # Verify - should still work with empty description
                 assert isinstance(result, Plan)
-                mock_client.generate_plan.assert_awaited_once_with(
+                mock_service.generate_plan.assert_awaited_once_with(
                     issue_title="Issue with no description",
                     issue_body="",
                     issue_number=1,
@@ -158,14 +158,14 @@ class TestRunPlanningAgent:
 
     @pytest.mark.asyncio
     async def test_run_planning_agent_preserves_plan_structure(self) -> None:
-        """run_planning_agent preserves all Plan fields from ClaudeClient."""
+        """run_planning_agent preserves all Plan fields from PlanningService."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
-                "troller.worker.activities.planning_activities.ClaudeClient"
-            ) as mock_client_class:
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_service_class:
                 # Setup mock
-                mock_client = MagicMock()
-                mock_client_class.return_value = mock_client
+                mock_service = MagicMock()
+                mock_service_class.return_value = mock_service
 
                 # Complex plan with multiple steps
                 expected_plan = Plan(
@@ -198,7 +198,7 @@ class TestRunPlanningAgent:
                     technical_approach="Use hexagonal architecture pattern",
                     testing_strategy="TDD with pytest and mocks",
                 )
-                mock_client.generate_plan = AsyncMock(return_value=expected_plan)
+                mock_service.generate_plan = AsyncMock(return_value=expected_plan)
 
                 # Test
                 issue = Issue(
