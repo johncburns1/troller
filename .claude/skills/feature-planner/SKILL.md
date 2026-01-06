@@ -6,80 +6,91 @@ allowed-tools: Task, TodoWrite, Bash(git:*), Bash(gh:*), Skill(engineering:engin
 
 # Feature Planner
 
-Creates comprehensive implementation plans for GitHub issues.
+Creates implementation plans for GitHub issues with YAGNI validation.
 
 ## When to Use
 
 - Starting work on a GitHub issue
-- Need to understand requirements and plan approach
 - Before implementing features or bug fixes
 
-## Planning Steps
+## Planning Workflow
 
-### 1. Discover & Analyze
-
-**Fetch issue:**
+### 1. Fetch & Understand Issue
 
 ```bash
 gh issue view <issue-number>
 ```
 
-**Identify:**
+Identify acceptance criteria, dependencies, affected components.
 
-- Acceptance criteria
-- Dependencies
-- Affected components
-- Technical constraints
+### 2. YAGNI Check - Is Work Actually Needed?
 
-**Explore codebase thoroughly:**
+**Before planning implementation, audit the current state:**
 
 ```text
 Task(subagent_type="Explore", thoroughness="very thorough"):
-"Analyze codebase structure and architecture.
-Find files related to [feature/component].
-Identify existing patterns, testing strategies, and similar implementations."
+"Audit current implementation related to issue #<number>.
+Determine if the problem described actually exists.
+Find [specific components mentioned in issue].
+Check if functionality already works as described."
 ```
 
-### 2. Apply Standards & Create Plan
+**Decision point:**
+- **If issue is already resolved or doesn't apply:** Report findings, recommend closing issue
+- **If work is needed:** Continue to step 3
 
-**Invoke engineering standards:**
+### 3. Deep Codebase Analysis
+
+```text
+Task(subagent_type="Explore", thoroughness="very thorough"):
+"Analyze codebase for implementing [feature/fix].
+Find related files, existing patterns, test strategies, and similar implementations.
+Identify architecture patterns being followed."
+```
+
+### 4. Apply Engineering Standards
 
 ```text
 Skill(engineering:engineering-standards)
 Skill(engineering:python-engineering)  # For Python projects
 ```
 
-**Create branch:**
+### 5. Create Branch & Plan
+
+**Create feature branch:**
 
 ```bash
-git checkout -b feature/issue-<number>-<description>
+git checkout -b feature/issue-<number>-<brief-description>
 ```
 
-**Create implementation plan with TodoWrite:**
+**Create detailed TodoWrite plan:**
 
 ```text
 TodoWrite([
+  {content: "Write tests for [specific component]", status: "pending", activeForm: "Writing tests"},
   {content: "Implement [component 1]", status: "pending", activeForm: "Implementing [component 1]"},
   {content: "Implement [component 2]", status: "pending", activeForm: "Implementing [component 2]"},
-  {content: "Write tests", status: "pending", activeForm: "Writing tests"},
-  {content: "Quality checks passing", status: "pending", activeForm: "Running checks"},
-  {content: "Commit and push", status: "pending", activeForm: "Pushing changes"},
+  {content: "Update existing tests", status: "pending", activeForm: "Updating tests"},
+  {content: "Run quality checks (ruff, mypy, pytest)", status: "pending", activeForm: "Running quality checks"},
+  {content: "Commit and push", status: "pending", activeForm: "Committing changes"},
   {content: "Create pull request", status: "pending", activeForm: "Creating PR"}
 ])
 ```
 
-Break down into specific, actionable tasks.
+**Requirements:**
+- Break down into specific, testable tasks
+- Test tasks come BEFORE implementation tasks (TDD)
+- Include quality checks as explicit step
 
-## Output
+## Planning Output
 
-After planning, provide:
-
-- ✅ Branch created
-- ✅ TodoWrite checklist created
-- ✅ Engineering standards applied
+Present to user:
+- ✅ YAGNI validation result
+- ✅ Branch created (if work needed)
+- ✅ TodoWrite plan with specific tasks
 - ✅ Understanding of existing patterns
-- ✅ Clear implementation steps
+- ✅ Architecture approach
 
 ## Handoff to Implementation
 
-Once planning is complete, use the `feature-implementation` skill to execute the plan.
+Once user confirms plan, use `feature-implementation` skill to execute.
