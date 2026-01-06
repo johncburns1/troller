@@ -7,9 +7,6 @@ This service orchestrates the plan generation workflow:
 4. Clean up cloned repository
 """
 
-import shutil
-import subprocess
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +14,7 @@ from claude_agent_sdk import ClaudeAgentOptions
 
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.adapters.claude_client import ClaudeClient
+from troller.worker.adapters.repo_cloner import RepoCloner
 from troller.worker.services.planning_models import PlanResponse
 
 
@@ -32,13 +30,15 @@ class PlanningService:
     Coordinates repository management and plan generation workflow.
     """
 
-    def __init__(self, claude_client: ClaudeClient) -> None:
-        """Initialize planning service with Claude client.
+    def __init__(self, claude_client: ClaudeClient, repo_cloner: RepoCloner) -> None:
+        """Initialize planning service with Claude client and repo cloner.
 
         Args:
             claude_client: Generic Claude API client for queries.
+            repo_cloner: Repository cloner adapter for git operations.
         """
         self._client = claude_client
+        self._repo_cloner = repo_cloner
 
     async def generate_plan(
         self,
@@ -75,7 +75,7 @@ class PlanningService:
 
         try:
             # Step 1: Clone the repository
-            temp_dir, repo_path = await self._clone_repository(
+            temp_dir, repo_path = await self._repo_cloner.clone_to_temp(
                 repo_owner, repo_name, target_branch
             )
 
@@ -89,86 +89,7 @@ class PlanningService:
         finally:
             # Step 3: Always cleanup, even if planning fails
             if temp_dir and temp_dir.exists():
-                shutil.rmtree(temp_dir, ignore_errors=True)
-
-    async def _clone_repository(
-        self, repo_owner: str, repo_name: str, target_branch: str | None
-    ) -> tuple[Path, Path]:
-        """Clone a GitHub repository to a temporary directory.
-
-        Args:
-            repo_owner: GitHub repository owner.
-            repo_name: GitHub repository name.
-            target_branch: Branch to clone (tries main then master if None).
-
-        Returns:
-            Tuple of (temp_dir_path, cloned_repo_path).
-
-        Raises:
-            RuntimeError: If git clone fails.
-        """
-        # Create temporary directory
-        temp_dir = Path(tempfile.mkdtemp(prefix=f"troller_{repo_name}_"))
-        clone_path = temp_dir / repo_name
-
-        # Construct repository URL
-        repo_url = f"https://github.com/{repo_owner}/{repo_name}.git"
-
-        # Determine branch to clone
-        branch = target_branch or "main"
-
-        # Clone the repository (shallow clone for speed)
-        try:
-            subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "--depth",
-                    "1",
-                    "--branch",
-                    branch,
-                    repo_url,
-                    str(clone_path),
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-
-            return temp_dir, clone_path
-
-        except subprocess.CalledProcessError:
-            # If main branch doesn't exist and no specific branch was requested, try master
-            if branch == "main" and target_branch is None:
-                try:
-                    subprocess.run(
-                        [
-                            "git",
-                            "clone",
-                            "--depth",
-                            "1",
-                            "--branch",
-                            "master",
-                            repo_url,
-                            str(clone_path),
-                        ],
-                        capture_output=True,
-                        text=True,
-                        check=True,
-                    )
-
-                    return temp_dir, clone_path
-
-                except subprocess.CalledProcessError as e:
-                    # Clean up and raise
-                    shutil.rmtree(temp_dir, ignore_errors=True)
-                    raise RuntimeError(
-                        f"Failed to clone {repo_url} on both main and master branches: {e.stderr}"
-                    ) from e
-
-            # Clean up and raise
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            raise RuntimeError(f"Failed to clone {repo_url} on branch {branch}")
+                self._repo_cloner.cleanup(temp_dir)
 
     async def _generate_plan_with_context(
         self,
@@ -254,8 +175,9 @@ Requirements:
 - Order steps with dependencies in mind"""
 
         # Use structured query for guaranteed schema compliance
+        # Use higher token limit for comprehensive plan generation
         plan_response = await self._client.structured_query(
-            planning_prompt, PlanResponse
+            planning_prompt, PlanResponse, token_limit=50_000
         )
 
         # Cast to PlanResponse for type safety

@@ -1,98 +1,78 @@
 ---
 name: feature-implementation
-description: Implementation workflow using iteration loops - explores repository to prime context, invokes engineering standards, implements changes with Ralph-wiggum (max iterations), runs quality checks, commits, and creates PR. Use when executing an implementation plan.
-allowed-tools: Task, TodoWrite, Bash(git:*), Bash(gh:*), Bash(uv:*), Bash(pytest:*), Bash(ruff:*), Bash(mypy:*), Skill(engineering:engineering-standards), Skill(engineering:python-engineering)
+description: Ralph Wiggum TDD loops - loads engineering standards, iterates with quality gates, commits, creates PR.
+allowed-tools: Task, TodoWrite, Bash(git:*), Bash(gh:*), Bash(uv:*), Bash(pytest:*), Bash(ruff:*), Bash(mypy:*), Skill(engineering:engineering-standards), Skill(engineering:python-engineering), Skill(ralph-wiggum:ralph-loop), Read, Write, Edit
 ---
 
 # Feature Implementation
 
-Executes implementation plans using iteration loops with quality gates.
+Ralph Wiggum iteration loops with TDD and quality gates.
 
-## When to Use
+## Workflow
 
-- Have an existing TodoWrite plan to implement
-- Ready to write code after planning phase
-- Need to implement, test, and create PR
+### 1. Read Existing Code
 
-## Implementation Steps
-
-### 1. Prime Context
-
-**Quick exploration:**
-
-```text
-Task(subagent_type="Explore", thoroughness="quick"):
-"Quick overview of [components being modified].
-Review existing patterns and test structure."
+```bash
+Read(file_path="/path/to/file.py")
+Read(file_path="/path/to/test_file.py")
 ```
 
-**Invoke engineering standards:**
+### 2. Load Engineering Standards
+
+Load BEFORE Ralph Wiggum starts to prime TDD/architecture context:
 
 ```text
 Skill(engineering:engineering-standards)
-Skill(engineering:python-engineering)  # For Python projects
+Skill(engineering:python-engineering)
 ```
 
-### 2. Implement with Iteration Loops
+### 3. Run Ralph Wiggum Loop
 
-**Use Ralph-wiggum for implementation (max 3-5 iterations):**
+```text
+Skill(ralph-wiggum:ralph-loop, args="5")
+```
 
-Set max iterations: **5**
+**If permission error:** Request user approval, don't skip.
 
-Each iteration:
+Ralph Wiggum iterates automatically (max 5):
 
-1. **Read** existing code
-2. **Implement** following engineering standards
-3. **Test** immediately
-4. **Quality check** (ruff, mypy, linting)
-5. **Fix** issues
-6. **Repeat** until passing
+- Read code
+- Write tests first (TDD)
+- Implement to pass tests
+- Run quality checks: pytest, ruff, mypy
+- Fix issues
+- Repeat
 
-**Quality gates:**
+**Update TodoWrite as tasks complete.**
 
-- ✅ Tests passing
-- ✅ Linting passing (ruff check --fix)
-- ✅ Formatting passing (ruff format)
-- ✅ Type checking passing (mypy src)
+**If max iterations exceeded:** Simplify and re-run.
 
-**If max iterations exceeded:** Stop, reassess, simplify approach.
-
-### 3. Final Quality Assurance
+### 4. Final QA
 
 ```bash
-uv run pytest                    # All tests
-uv run ruff check --fix          # Linting
-uv run ruff format               # Formatting
-uv run mypy src                  # Type checking
+uv run pytest && uv run ruff check --fix && uv run ruff format && uv run mypy src
 ```
 
-All must pass.
-
-### 4. Commit & Push
-
-**Review:**
+### 5. Clean Commit
 
 ```bash
 git status
-git diff
-```
-
-**Commit:**
-
-```bash
-git add <files>
+git diff                          # Check for unrelated changes
+git restore <unrelated-file>      # Clean up
+git add <relevant-files>
 git commit -m "$(cat <<'EOF'
 <Summary ≤50 chars>
 
-<Detailed description>
-
 Technical details:
-- Detail 1
-- Detail 2
+- Created/modified [files]
+- [Architecture decisions]
 
 Acceptance criteria:
-✓ Criterion 1
-✓ Criterion 2
+✓ [Criteria from issue]
+✓ Tests pass ([N] tests)
+✓ Quality checks pass
+
+Closes #<issue-number>
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
@@ -101,29 +81,23 @@ EOF
 )"
 ```
 
-**Push:**
+### 6. Push & PR
 
 ```bash
 git push -u origin <branch-name>
-```
-
-### 5. Create Pull Request
-
-```bash
 gh pr create --title "Title" --body "$(cat <<'EOF'
 ## Summary
-<What was implemented>
+[What and why]
 
 ## Changes
-- Change 1
-- Change 2
+- Created/modified [files and purpose]
 
 ## Testing
-✓ All tests passing
+✓ [N] tests passing
 ✓ Quality checks passing
 
 ## Acceptance Criteria
-✓ All criteria met
+✓ [Criteria from issue]
 
 Closes #<issue-number>
 
@@ -132,26 +106,19 @@ EOF
 )"
 ```
 
-**Complete TodoWrite.**
+Complete TodoWrite.
 
-## Quick Checklist
+## Rules
 
-```markdown
-- [ ] Quick exploration (Task/Explore)
-- [ ] Invoke engineering standards
-- [ ] Implement with Ralph-wiggum (max 5 iterations)
-  - [ ] Read → Code → Test → Fix → Repeat
-- [ ] Final QA (all checks passing)
-- [ ] Commit
-- [ ] Push
-- [ ] Create PR
-- [ ] Complete TodoWrite
-```
+- Only modify files related to the task
+- Update TodoWrite frequently (in_progress → completed)
+- One task in_progress at a time
+- Fix quality check failures immediately
 
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| Max iterations hit | Simplify, break into smaller tasks |
-| Tests failing | Fix before committing |
-| Pre-commit fails | Add deps to `.pre-commit-config.yaml` |
+| Ralph Wiggum permission error | Request user approval |
+| Max iterations exceeded | Simplify or break into smaller tasks |
+| Unrelated changes | `git restore <file>` |

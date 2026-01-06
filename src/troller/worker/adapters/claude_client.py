@@ -72,6 +72,7 @@ class ClaudeClient:
         prompt: str,
         schema: type[BaseModel],
         model: str = "claude-sonnet-4-5-20250929",
+        token_limit: int = 4096,
     ) -> BaseModel:
         """Query Claude with structured output guarantee.
 
@@ -82,6 +83,7 @@ class ClaudeClient:
             prompt: The query prompt to send to Claude.
             schema: Pydantic model class defining the expected response structure.
             model: Claude model to use (defaults to Sonnet 4.5).
+            token_limit: Maximum tokens for the response (defaults to 4096).
 
         Returns:
             Validated Pydantic model instance matching the schema.
@@ -103,7 +105,7 @@ class ClaudeClient:
         # Note: response_format is passed via extra_body for type compatibility
         response = self._anthropic_client.messages.create(
             model=model,
-            max_tokens=50_000,
+            max_tokens=token_limit,
             messages=[{"role": "user", "content": prompt}],
             extra_body={
                 "response_format": {
