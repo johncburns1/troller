@@ -5,6 +5,7 @@ Autonomous GitHub issue resolution system using Temporal workflows and multi-age
 ## Overview
 
 Troller automatically implements GitHub issues using AI agents orchestrated by Temporal workflows:
+
 - **Planning Agent** - Analyzes issues and creates implementation plans
 - **Coding Agent** - Implements the planned changes
 - **Review Agent** - Reviews code quality and completeness
@@ -47,6 +48,7 @@ LOG_LEVEL=INFO
 ```
 
 Configuration priority (highest to lowest):
+
 1. Command-line arguments
 2. Environment variables
 3. `.env` file
@@ -67,6 +69,7 @@ uv run python src/troller/worker/run_worker.py
 ```
 
 Optional arguments:
+
 - `--temporal-address`: Temporal server address
 - `--task-queue`: Task queue name
 
@@ -91,6 +94,7 @@ uv run python cli.py \
 ```
 
 Optional arguments:
+
 - `--target-branch`: Target branch for implementation
 - `--temporal-address`: Temporal server address
 - `--task-queue`: Task queue name
@@ -98,6 +102,7 @@ Optional arguments:
 ## Architecture
 
 Follows **hexagonal architecture** (ports and adapters):
+
 - **Domain** - Pure business logic (no framework dependencies)
 - **Workflows** - Temporal orchestration (coordinates activities)
 - **Activities** - Individual operations (GitHub API, Claude API calls)
