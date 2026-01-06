@@ -165,18 +165,53 @@ Create a comprehensive implementation plan following TDD and engineering best pr
         Returns:
             Plan domain object constructed from messages.
         """
-        # Collect text content from assistant messages
+        plan_text = self._extract_plan_text(messages)
+        steps = self._extract_steps_from_messages(messages)
+        summary = self._extract_summary(plan_text)
+
+        return Plan(
+            summary=summary,
+            steps=steps,
+            created_at=datetime.now(),
+            metadata={
+                "issue_number": issue_number,
+                "skill_output": plan_text[:1000],  # Store first 1000 chars
+            },
+        )
+
+    def _extract_plan_text(self, messages: list[Any]) -> str:
+        """Extract all text content from assistant messages.
+
+        Args:
+            messages: List of messages from skill execution.
+
+        Returns:
+            Combined plan text from all assistant messages.
+        """
         plan_text_parts = []
-        steps_from_todos = []
 
         for message in messages:
-            # Extract text from assistant messages
             if hasattr(message, "content"):
                 for block in message.content:
                     if hasattr(block, "text"):
                         plan_text_parts.append(block.text)
 
-                    # Extract steps from TodoWrite tool uses
+        return "\n\n".join(plan_text_parts)
+
+    def _extract_steps_from_messages(self, messages: list[Any]) -> list[PlanStep]:
+        """Extract implementation steps from TodoWrite tool uses.
+
+        Args:
+            messages: List of messages from skill execution.
+
+        Returns:
+            List of PlanStep objects extracted from TodoWrite calls.
+        """
+        steps = []
+
+        for message in messages:
+            if hasattr(message, "content"):
+                for block in message.content:
                     if hasattr(block, "name") and block.name == "TodoWrite":
                         if hasattr(block, "input") and "todos" in block.input:
                             for i, todo in enumerate(block.input["todos"]):
@@ -184,31 +219,26 @@ Create a comprehensive implementation plan following TDD and engineering best pr
                                     id=f"step-{i + 1}",
                                     description=todo.get("content", ""),
                                     completed=False,
-                                    related_files=None,
-                                    estimated_complexity=None,
                                 )
-                                steps_from_todos.append(step)
+                                steps.append(step)
 
-        # Combine all plan text
-        full_plan_text = "\n\n".join(plan_text_parts)
+        return steps
 
-        # Extract summary (first non-empty line or first paragraph)
+    def _extract_summary(self, plan_text: str) -> str:
+        """Extract plan summary from full plan text.
+
+        Finds the first non-empty, non-heading line as the summary.
+
+        Args:
+            plan_text: Full plan text from skill output.
+
+        Returns:
+            Extracted summary or default text.
+        """
         summary_lines = [
             line.strip()
-            for line in full_plan_text.split("\n")
+            for line in plan_text.split("\n")
             if line.strip() and not line.strip().startswith("#")
         ]
-        summary = summary_lines[0] if summary_lines else "Implementation plan"
 
-        # Create plan with extracted information
-        return Plan(
-            summary=summary,
-            steps=steps_from_todos if steps_from_todos else [],
-            created_at=datetime.now(),
-            metadata={
-                "issue_number": issue_number,
-                "skill_output": full_plan_text[:1000],  # Store first 1000 chars
-            },
-            technical_approach=None,  # Extracted from free-form text if needed
-            testing_strategy=None,  # Extracted from free-form text if needed
-        )
+        return summary_lines[0] if summary_lines else "Implementation plan"

@@ -36,14 +36,10 @@ class TestRunPlanningAgent:
                             id="step-1",
                             description="Implement feature",
                             completed=False,
-                            related_files=["file.py"],
-                            estimated_complexity="moderate",
                         )
                     ],
                     created_at=datetime.now(),
                     metadata={"issue_number": 42},
-                    technical_approach="Use existing patterns",
-                    testing_strategy="Write unit tests",
                 )
                 mock_service.generate_plan = AsyncMock(return_value=expected_plan)
 
@@ -175,28 +171,20 @@ class TestRunPlanningAgent:
                             id="step-1",
                             description="Research existing code",
                             completed=False,
-                            related_files=None,
-                            estimated_complexity="simple",
                         ),
                         PlanStep(
                             id="step-2",
                             description="Implement core logic",
                             completed=False,
-                            related_files=["src/main.py", "src/utils.py"],
-                            estimated_complexity="complex",
                         ),
                         PlanStep(
                             id="step-3",
                             description="Add tests",
                             completed=False,
-                            related_files=["tests/test_main.py"],
-                            estimated_complexity="moderate",
                         ),
                     ],
                     created_at=datetime(2025, 1, 1, 12, 0, 0),
                     metadata={"issue_number": 999, "custom_field": "value"},
-                    technical_approach="Use hexagonal architecture pattern",
-                    testing_strategy="TDD with pytest and mocks",
                 )
                 mock_service.generate_plan = AsyncMock(return_value=expected_plan)
 
@@ -219,9 +207,7 @@ class TestRunPlanningAgent:
                 assert result.summary == "Comprehensive implementation plan"
                 assert len(result.steps) == 3
                 assert result.steps[0].id == "step-1"
-                assert result.steps[1].related_files == ["src/main.py", "src/utils.py"]
-                assert result.steps[2].estimated_complexity == "moderate"
+                assert result.steps[1].description == "Implement core logic"
+                assert result.steps[2].description == "Add tests"
                 assert result.created_at == datetime(2025, 1, 1, 12, 0, 0)
                 assert result.metadata == {"issue_number": 999, "custom_field": "value"}
-                assert result.technical_approach == "Use hexagonal architecture pattern"
-                assert result.testing_strategy == "TDD with pytest and mocks"

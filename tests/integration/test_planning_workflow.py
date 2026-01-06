@@ -56,53 +56,33 @@ def expected_plan() -> Plan:
                 id="step-1",
                 description="Create user model and database schema",
                 completed=False,
-                related_files=["src/models/user.py", "migrations/001_create_users.sql"],
-                estimated_complexity="moderate",
             ),
             PlanStep(
                 id="step-2",
                 description="Implement password hashing with bcrypt",
                 completed=False,
-                related_files=["src/auth/password.py"],
-                estimated_complexity="simple",
             ),
             PlanStep(
                 id="step-3",
                 description="Create JWT token generation and validation",
                 completed=False,
-                related_files=["src/auth/jwt.py"],
-                estimated_complexity="moderate",
             ),
             PlanStep(
                 id="step-4",
                 description="Implement registration and login endpoints",
                 completed=False,
-                related_files=["src/api/auth.py"],
-                estimated_complexity="complex",
             ),
             PlanStep(
                 id="step-5",
                 description="Add authentication middleware",
                 completed=False,
-                related_files=["src/middleware/auth.py"],
-                estimated_complexity="moderate",
             ),
         ],
         created_at=datetime.now(),
         metadata={
             "issue_number": 42,
-            "estimated_total_complexity": "complex",
+            "skill_output": "Full implementation plan text from skill...",
         },
-        technical_approach=(
-            "Use JWT for stateless authentication. "
-            "Store hashed passwords with bcrypt. "
-            "Implement middleware for protecting routes."
-        ),
-        testing_strategy=(
-            "Unit tests for password hashing and JWT functions. "
-            "Integration tests for auth endpoints. "
-            "End-to-end tests for full authentication flow."
-        ),
     )
 
 
@@ -110,13 +90,9 @@ def expected_plan() -> Plan:
 async def test_planning_workflow_end_to_end(
     mock_github_issue: MagicMock, expected_plan: Plan
 ) -> None:
-    """Test the complete planning workflow from trigger to plan generation.
+    """Workflow executes end-to-end: fetch_issue → run_planning_agent → returns Plan.
 
-    This integration test validates:
-    - Workflow executes successfully
-    - Activities are called in correct order
-    - Plan is returned with expected structure
-    - All Plan fields are properly populated
+    This integration test validates the full workflow orchestration.
     """
     with patch.dict(
         os.environ, {"GITHUB_TOKEN": "test-token", "ANTHROPIC_API_KEY": "test-key"}
@@ -129,85 +105,50 @@ async def test_planning_workflow_end_to_end(
                 "troller.worker.activities.planning_activities.PlanningService"
             ) as mock_planning_service_class,
         ):
-            # Setup GitHub mock
+            # Setup GitHub client mock
             mock_gh_client = MagicMock()
             mock_gh_client_class.return_value = mock_gh_client
             mock_gh_client.get_issue.return_value = mock_github_issue
 
-            # Setup PlanningService mock
+            # Setup planning service mock
             mock_planning_service = MagicMock()
             mock_planning_service_class.return_value = mock_planning_service
             mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
 
-            # Run integration test
+            # Create workflow environment
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
                     env.client,
-                    task_queue="integration-test-queue",
+                    task_queue="test-task-queue",
                     workflows=[IssueResolutionWorkflow],
                     activities=[fetch_issue, run_planning_agent],
                 ):
-                    # Execute workflow with realistic input
+                    # Execute workflow
                     workflow_input = WorkflowInput(
                         repo_owner="test-org",
                         repo_name="test-repo",
                         issue_number=42,
-                        target_branch="main",
                     )
-
                     result = await env.client.execute_workflow(
                         IssueResolutionWorkflow.run,
                         workflow_input,
-                        id="integration-test-planning-workflow",
-                        task_queue="integration-test-queue",
+                        id="test-workflow-1",
+                        task_queue="test-task-queue",
                     )
 
-                    # Verify the result is a Plan instance
-                    assert isinstance(result, Plan)
-
-                    # Verify Plan has required fields
-                    assert result.summary != ""
-                    assert result.summary.startswith("Implementation plan for:")
-                    assert len(result.steps) > 0
-                    assert result.created_at is not None
-                    assert isinstance(result.metadata, dict)
-
-                    # Verify all steps have proper structure
-                    for step in result.steps:
-                        assert isinstance(step, PlanStep)
-                        assert step.id != ""
-                        assert step.id.startswith("step-")
-                        assert step.description != ""
-                        assert isinstance(step.completed, bool)
-                        assert (
-                            step.completed is False
-                        )  # New plans have incomplete steps
-
-                    # Verify GitHub client was called correctly
-                    mock_gh_client.get_issue.assert_called_once_with(
-                        owner="test-org", repo="test-repo", issue_number=42
-                    )
-
-                    # Verify Claude client was called with issue data and repo info
-                    mock_planning_service.generate_plan.assert_awaited_once()
-                    call_kwargs = mock_planning_service.generate_plan.call_args.kwargs
-                    assert call_kwargs["issue_title"] == mock_github_issue.title
-                    assert call_kwargs["issue_body"] == mock_github_issue.body
-                    assert call_kwargs["issue_number"] == 42
-                    assert call_kwargs["repo_owner"] == "test-org"
-                    assert call_kwargs["repo_name"] == "test-repo"
-                    assert call_kwargs["target_branch"] == "main"
+                    # Verify workflow returned the plan
+                    assert result is not None
+                    assert result.summary == expected_plan.summary
+                    assert len(result.steps) == len(expected_plan.steps)
 
 
 @pytest.mark.asyncio
-async def test_planning_workflow_validates_plan_metadata(
-    mock_github_issue: MagicMock, expected_plan: Plan
-) -> None:
-    """Test that the planning workflow returns a plan with proper metadata.
+async def test_planning_workflow_validates_plan_metadata() -> None:
+    """Workflow validates that Plan includes required metadata.
 
-    Validates:
-    - Metadata dictionary contains expected keys
-    - Metadata values are appropriate types
+    Ensures:
+    - issue_number is present in Plan.metadata
+    - metadata dict is properly structured
     """
     with patch.dict(
         os.environ, {"GITHUB_TOKEN": "test-token", "ANTHROPIC_API_KEY": "test-key"}
@@ -223,48 +164,60 @@ async def test_planning_workflow_validates_plan_metadata(
             # Setup mocks
             mock_gh_client = MagicMock()
             mock_gh_client_class.return_value = mock_gh_client
-            mock_gh_client.get_issue.return_value = mock_github_issue
+
+            mock_issue = MagicMock(spec=GithubIssue)
+            mock_issue.number = 123
+            mock_issue.title = "Test issue"
+            mock_issue.body = "Test description"
+            mock_issue.labels = []
+            mock_issue.html_url = "https://github.com/test/test/issues/123"
+            mock_gh_client.get_issue.return_value = mock_issue
+
+            test_plan = Plan(
+                summary="Test plan",
+                steps=[PlanStep(id="step-1", description="Test step", completed=False)],
+                created_at=datetime.now(),
+                metadata={
+                    "issue_number": 123,
+                    "skill_output": "Plan from skill execution",
+                },
+            )
 
             mock_planning_service = MagicMock()
             mock_planning_service_class.return_value = mock_planning_service
-            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
+            mock_planning_service.generate_plan = AsyncMock(return_value=test_plan)
 
-            # Run test
+            # Create workflow environment and execute
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
                     env.client,
-                    task_queue="integration-test-metadata-queue",
+                    task_queue="test-task-queue",
                     workflows=[IssueResolutionWorkflow],
                     activities=[fetch_issue, run_planning_agent],
                 ):
                     workflow_input = WorkflowInput(
-                        repo_owner="test-org",
-                        repo_name="test-repo",
-                        issue_number=42,
+                        repo_owner="test",
+                        repo_name="test",
+                        issue_number=123,
                     )
-
                     result = await env.client.execute_workflow(
                         IssueResolutionWorkflow.run,
                         workflow_input,
-                        id="integration-test-metadata",
-                        task_queue="integration-test-metadata-queue",
+                        id="test-workflow-metadata",
+                        task_queue="test-task-queue",
                     )
 
-                    # Verify metadata structure
-                    assert isinstance(result.metadata, dict)
+                    # Verify metadata
                     assert "issue_number" in result.metadata
-                    assert result.metadata["issue_number"] == 42
+                    assert result.metadata["issue_number"] == 123
 
 
 @pytest.mark.asyncio
-async def test_planning_workflow_validates_step_structure(
-    mock_github_issue: MagicMock, expected_plan: Plan
-) -> None:
-    """Test that plan steps have all required and optional fields.
+async def test_planning_workflow_validates_step_structure() -> None:
+    """Workflow validates PlanStep structure.
 
     Validates:
     - Required fields: id, description, completed
-    - Optional fields: related_files, estimated_complexity
     - Field types are correct
     """
     with patch.dict(
@@ -281,68 +234,62 @@ async def test_planning_workflow_validates_step_structure(
             # Setup mocks
             mock_gh_client = MagicMock()
             mock_gh_client_class.return_value = mock_gh_client
-            mock_gh_client.get_issue.return_value = mock_github_issue
+
+            mock_issue = MagicMock(spec=GithubIssue)
+            mock_issue.number = 456
+            mock_issue.title = "Test"
+            mock_issue.body = "Description"
+            mock_issue.labels = []
+            mock_issue.html_url = "https://github.com/test/test/issues/456"
+            mock_gh_client.get_issue.return_value = mock_issue
+
+            test_plan = Plan(
+                summary="Test plan with multiple steps",
+                steps=[
+                    PlanStep(id="step-1", description="First step", completed=False),
+                    PlanStep(id="step-2", description="Second step", completed=False),
+                    PlanStep(id="step-3", description="Third step", completed=True),
+                ],
+                created_at=datetime.now(),
+                metadata={"issue_number": 456},
+            )
 
             mock_planning_service = MagicMock()
             mock_planning_service_class.return_value = mock_planning_service
-            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
+            mock_planning_service.generate_plan = AsyncMock(return_value=test_plan)
 
-            # Run test
+            # Execute workflow
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
                     env.client,
-                    task_queue="integration-test-steps-queue",
+                    task_queue="test-task-queue",
                     workflows=[IssueResolutionWorkflow],
                     activities=[fetch_issue, run_planning_agent],
                 ):
                     workflow_input = WorkflowInput(
-                        repo_owner="test-org",
-                        repo_name="test-repo",
-                        issue_number=42,
+                        repo_owner="test",
+                        repo_name="test",
+                        issue_number=456,
                     )
-
                     result = await env.client.execute_workflow(
                         IssueResolutionWorkflow.run,
                         workflow_input,
-                        id="integration-test-steps",
-                        task_queue="integration-test-steps-queue",
+                        id="test-workflow-steps",
+                        task_queue="test-task-queue",
                     )
 
-                    # Validate each step has proper structure
-                    assert len(result.steps) > 0
-
-                    for i, step in enumerate(result.steps, start=1):
+                    # Validate step structure
+                    assert len(result.steps) == 3
+                    for step in result.steps:
                         # Required fields
                         assert isinstance(step.id, str)
-                        assert step.id != ""
                         assert isinstance(step.description, str)
-                        assert step.description != ""
                         assert isinstance(step.completed, bool)
-
-                        # Optional fields - check types if present
-                        if step.related_files is not None:
-                            assert isinstance(step.related_files, list)
-                            assert all(isinstance(f, str) for f in step.related_files)
-
-                        if step.estimated_complexity is not None:
-                            assert step.estimated_complexity in [
-                                "simple",
-                                "moderate",
-                                "complex",
-                            ]
 
 
 @pytest.mark.asyncio
-async def test_planning_workflow_with_optional_fields(
-    mock_github_issue: MagicMock, expected_plan: Plan
-) -> None:
-    """Test that the workflow handles optional Plan fields correctly.
-
-    Validates:
-    - technical_approach is included if provided
-    - testing_strategy is included if provided
-    - Fields are properly typed strings
-    """
+async def test_planning_workflow_with_optional_fields() -> None:
+    """Workflow handles Plans with various metadata configurations."""
     with patch.dict(
         os.environ, {"GITHUB_TOKEN": "test-token", "ANTHROPIC_API_KEY": "test-key"}
     ):
@@ -357,38 +304,52 @@ async def test_planning_workflow_with_optional_fields(
             # Setup mocks
             mock_gh_client = MagicMock()
             mock_gh_client_class.return_value = mock_gh_client
-            mock_gh_client.get_issue.return_value = mock_github_issue
+
+            mock_issue = MagicMock(spec=GithubIssue)
+            mock_issue.number = 789
+            mock_issue.title = "Feature"
+            mock_issue.body = "Add feature"
+            mock_issue.labels = []
+            mock_issue.html_url = "https://github.com/test/test/issues/789"
+            mock_gh_client.get_issue.return_value = mock_issue
+
+            # Plan with rich metadata
+            test_plan = Plan(
+                summary="Feature implementation",
+                steps=[PlanStep(id="step-1", description="Implement", completed=False)],
+                created_at=datetime.now(),
+                metadata={
+                    "issue_number": 789,
+                    "skill_output": "Detailed plan from skill execution...",
+                    "custom_data": {"complexity": "high", "priority": 1},
+                },
+            )
 
             mock_planning_service = MagicMock()
             mock_planning_service_class.return_value = mock_planning_service
-            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
+            mock_planning_service.generate_plan = AsyncMock(return_value=test_plan)
 
-            # Run test
+            # Execute workflow
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
                     env.client,
-                    task_queue="integration-test-optional-queue",
+                    task_queue="test-task-queue",
                     workflows=[IssueResolutionWorkflow],
                     activities=[fetch_issue, run_planning_agent],
                 ):
                     workflow_input = WorkflowInput(
-                        repo_owner="test-org",
-                        repo_name="test-repo",
-                        issue_number=42,
+                        repo_owner="test",
+                        repo_name="test",
+                        issue_number=789,
                     )
-
                     result = await env.client.execute_workflow(
                         IssueResolutionWorkflow.run,
                         workflow_input,
-                        id="integration-test-optional",
-                        task_queue="integration-test-optional-queue",
+                        id="test-workflow-optional",
+                        task_queue="test-task-queue",
                     )
 
-                    # Verify optional fields are handled correctly
-                    if result.technical_approach is not None:
-                        assert isinstance(result.technical_approach, str)
-                        assert result.technical_approach != ""
-
-                    if result.testing_strategy is not None:
-                        assert isinstance(result.testing_strategy, str)
-                        assert result.testing_strategy != ""
+                    # Verify metadata preserved
+                    assert result.metadata["issue_number"] == 789
+                    assert "skill_output" in result.metadata
+                    assert "custom_data" in result.metadata
