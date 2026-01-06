@@ -32,8 +32,8 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                 "troller.worker.activities.github_activities.GitHubClient"
             ) as mock_gh_client_class,
             patch(
-                "troller.worker.activities.planning_activities.ClaudeClient"
-            ) as mock_claude_client_class,
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_planning_service_class,
         ):
             # Setup GitHub mock
             mock_gh_client = MagicMock()
@@ -51,8 +51,8 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
             # Setup Claude mock
             from datetime import datetime
 
-            mock_claude_client = MagicMock()
-            mock_claude_client_class.return_value = mock_claude_client
+            mock_planning_service = MagicMock()
+            mock_planning_service_class.return_value = mock_planning_service
             expected_plan = Plan(
                 summary="Implementation plan for: Test Issue",
                 steps=[
@@ -62,7 +62,7 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                 created_at=datetime.now(),
                 metadata={"issue_number": 123},
             )
-            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
+            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -104,8 +104,8 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                 "troller.worker.activities.github_activities.GitHubClient"
             ) as mock_gh_client_class,
             patch(
-                "troller.worker.activities.planning_activities.ClaudeClient"
-            ) as mock_claude_client_class,
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_planning_service_class,
         ):
             # Setup mocks
             from datetime import datetime
@@ -122,8 +122,8 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
             )
             mock_gh_client.get_issue.return_value = mock_github_issue
 
-            mock_claude_client = MagicMock()
-            mock_claude_client_class.return_value = mock_claude_client
+            mock_planning_service = MagicMock()
+            mock_planning_service_class.return_value = mock_planning_service
             expected_plan = Plan(
                 summary="Test plan",
                 steps=[
@@ -134,7 +134,7 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                 created_at=datetime.now(),
                 metadata={},
             )
-            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
+            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -177,8 +177,8 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
                 "troller.worker.activities.github_activities.GitHubClient"
             ) as mock_gh_client_class,
             patch(
-                "troller.worker.activities.planning_activities.ClaudeClient"
-            ) as mock_claude_client_class,
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_planning_service_class,
         ):
             # Setup mocks
             from datetime import datetime
@@ -195,15 +195,15 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
             )
             mock_gh_client.get_issue.return_value = mock_github_issue
 
-            mock_claude_client = MagicMock()
-            mock_claude_client_class.return_value = mock_claude_client
+            mock_planning_service = MagicMock()
+            mock_planning_service_class.return_value = mock_planning_service
             expected_plan = Plan(
                 summary="Plan",
                 steps=[PlanStep(id="step-1", description="Step", completed=False)],
                 created_at=datetime.now(),
                 metadata={},
             )
-            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
+            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -242,8 +242,8 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                 "troller.worker.activities.github_activities.GitHubClient"
             ) as mock_gh_client_class,
             patch(
-                "troller.worker.activities.planning_activities.ClaudeClient"
-            ) as mock_claude_client_class,
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_planning_service_class,
         ):
             # Setup mocks
             from datetime import datetime
@@ -264,15 +264,15 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
 
             mock_gh_client.get_issue.side_effect = mock_get_issue
 
-            mock_claude_client = MagicMock()
-            mock_claude_client_class.return_value = mock_claude_client
+            mock_planning_service = MagicMock()
+            mock_planning_service_class.return_value = mock_planning_service
             expected_plan = Plan(
                 summary="Plan",
                 steps=[PlanStep(id="step-1", description="Step", completed=False)],
                 created_at=datetime.now(),
                 metadata={},
             )
-            mock_claude_client.generate_plan = AsyncMock(return_value=expected_plan)
+            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -357,7 +357,7 @@ async def test_run_planning_agent_activity_returns_plan() -> None:
     """Test run_planning_agent activity returns valid plan."""
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
         with patch(
-            "troller.worker.activities.planning_activities.ClaudeClient"
+            "troller.worker.activities.planning_activities.PlanningService"
         ) as mock_client_class:
             # Setup mock
             mock_client = MagicMock()
