@@ -103,7 +103,7 @@ class ClaudeClient:
         # Note: response_format is passed via extra_body for type compatibility
         response = self._anthropic_client.messages.create(
             model=model,
-            max_tokens=4096,
+            max_tokens=50_000,
             messages=[{"role": "user", "content": prompt}],
             extra_body={
                 "response_format": {
