@@ -10,7 +10,10 @@
       "Skill(engineering:python-engineering)",
       "Bash(git checkout:*)",
       "Bash(uv run ruff format:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Skill(feature-planner)",
+      "Skill(feature-implementation)",
+      "Skill(ralph-wiggum:ralph-loop)"
     ]
   }
 }
