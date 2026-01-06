@@ -35,6 +35,7 @@ Skill(ralph-wiggum:ralph-loop, args="5")
 **If permission error:** Request user approval, don't skip.
 
 Ralph Wiggum iterates automatically (max 5):
+
 - Read code
 - Write tests first (TDD)
 - Implement to pass tests

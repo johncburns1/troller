@@ -36,6 +36,7 @@ Check if functionality already works as described."
 ```
 
 **Decision point:**
+
 - **If issue is already resolved or doesn't apply:** Report findings, recommend closing issue
 - **If work is needed:** Continue to step 3
 
@@ -78,6 +79,7 @@ TodoWrite([
 ```
 
 **Requirements:**
+
 - Break down into specific, testable tasks
 - Test tasks come BEFORE implementation tasks (TDD)
 - Include quality checks as explicit step
@@ -85,6 +87,7 @@ TodoWrite([
 ## Planning Output
 
 Present to user:
+
 - ✅ YAGNI validation result
 - ✅ Branch created (if work needed)
 - ✅ TodoWrite plan with specific tasks
