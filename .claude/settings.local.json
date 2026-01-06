@@ -7,7 +7,10 @@
       "Bash(uv run pytest:*)",
       "Bash(gh issue view:*)",
       "Skill(engineering:engineering-standards)",
-      "Skill(engineering:python-engineering)"
+      "Skill(engineering:python-engineering)",
+      "Bash(git checkout:*)",
+      "Bash(uv run ruff format:*)",
+      "Bash(git add:*)"
     ]
   }
 }
