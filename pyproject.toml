@@ -38,14 +38,6 @@ strict = true
 module = "temporalio.*"
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = "claude_agent_sdk.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "pydantic_settings.*"
-ignore_missing_imports = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
