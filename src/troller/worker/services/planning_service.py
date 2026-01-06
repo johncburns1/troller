@@ -142,7 +142,7 @@ Issue #{issue_number}: {issue_title}
 
 {issue_body}
 
-Create a comprehensive implementation plan following TDD and engineering best practices."""
+Create a comprehensive implementation plan using Skill(feature-planner)"""
 
         # Collect all messages from skill execution
         messages = []
