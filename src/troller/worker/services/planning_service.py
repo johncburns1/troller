@@ -175,8 +175,9 @@ Requirements:
 - Order steps with dependencies in mind"""
 
         # Use structured query for guaranteed schema compliance
+        # Use higher token limit for comprehensive plan generation
         plan_response = await self._client.structured_query(
-            planning_prompt, PlanResponse
+            planning_prompt, PlanResponse, token_limit=50_000
         )
 
         # Cast to PlanResponse for type safety
