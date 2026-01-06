@@ -8,19 +8,6 @@ allowed-tools: Task, TodoWrite, Bash(git:*), Bash(gh:*), Bash(uv:*), Bash(pytest
 
 Ralph Wiggum iteration loops with TDD and quality gates.
 
-## Efficiency Guidelines
-
-**Token Optimization:**
-- Read multiple related files in parallel (single message with multiple Read calls)
-- Run independent bash commands in parallel (e.g., ruff + mypy in same message)
-- Focus on changed files - don't re-read unchanged code
-
-**Verbosity Control:**
-- Be concise - show test output and fixes, skip explanations
-- Update TodoWrite without announcing it
-- Only explain non-obvious decisions
-- Use compact diff summaries instead of full file listings
-
 ## Workflow
 
 ### 1. Read Existing Code
@@ -58,25 +45,21 @@ Ralph Wiggum iterates automatically (max 5):
 
 **Update TodoWrite as tasks complete.**
 
-**Early termination logic:**
-- **If stuck repeating same errors (2+ iterations):** Simplify approach or break task down
-- **If tests passing + quality checks passing:** Exit loop early, proceed to Final QA
-- **If max iterations exceeded:** Review assumptions, consider alternative approach
+**Early termination:**
+- Exit early if tests + quality checks pass
+- If stuck (same errors 2+ times): simplify approach
+- If max iterations: review assumptions, break down task
 
-**If max iterations exceeded:** Simplify and re-run.
-
-### 4. Final QA & Validation
+### 4. Final QA
 
 ```bash
 uv run pytest && uv run ruff check --fix && uv run ruff format && uv run mypy src
 ```
 
-**Critical thinking checkpoint:**
-- Verify all TodoWrite tasks completed
-- Check no unrelated changes (git diff)
-- Confirm implementation matches plan
-- Validate test coverage for new code
-- Check for any dead code that should be removed
+**Validate before commit:**
+- All TodoWrite tasks completed
+- No unrelated changes (git diff)
+- Remove dead code
 
 ### 5. Clean Commit
 

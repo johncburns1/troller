@@ -13,19 +13,6 @@ Creates implementation plans for GitHub issues with YAGNI validation.
 - Starting work on a GitHub issue
 - Before implementing features or bug fixes
 
-## Efficiency Guidelines
-
-**Token Optimization:**
-- Use parallel tool calls when operations are independent (e.g., read multiple files in single message)
-- Keep exploration focused - specify exact patterns/files rather than broad searches
-- Summarize findings concisely
-
-**Verbosity Control:**
-- Be concise - more code/commands, less prose
-- Skip explanations for obvious operations
-- Present findings as bullet points, not paragraphs
-- Only explain complex decisions or trade-offs
-
 ## Planning Workflow
 
 ### 1. Fetch & Understand Issue
@@ -97,30 +84,20 @@ TodoWrite([
 - Test tasks come BEFORE implementation tasks (TDD)
 - Include quality checks as explicit step
 
-### 6. Critical Thinking Checkpoint
+### 6. Validate Plan
 
-**Before presenting plan, validate:**
-
-- **YAGNI audit**: Are all plan steps actually needed? Remove speculative/future work
-- **Dead code check**: Will implementation remove unused code found during exploration?
-- **Simplicity**: Is this the simplest approach? Can any steps be combined/eliminated?
-- **Assumptions**: What assumptions is the plan making? Document them in plan output
-
-**Proactive improvements:**
-- Flag unused code/fields discovered during exploration
-- Suggest simplifications if over-engineered patterns found
-- Document any ambiguities or assumptions as notes in plan output
+Before presenting:
+- YAGNI audit: remove speculative/future work from plan
+- Flag unused code/fields found during exploration
+- Document assumptions
 
 ## Planning Output
 
-**Concise summary including:**
-
-- YAGNI validation result (proceed/skip with brief reason)
-- Branch created (if work needed)
-- TodoWrite plan with specific tasks
-- Key patterns/architecture (bullet points)
-- Assumptions/notes (if any)
-- Dead code to remove (if found)
+- YAGNI validation (proceed/skip + reason)
+- Branch created
+- TodoWrite plan
+- Key patterns/architecture
+- Assumptions/dead code (if any)
 
 ## Handoff to Implementation
 
