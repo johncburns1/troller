@@ -15,7 +15,12 @@
       "Skill(feature-implementation)",
       "Skill(ralph-loop:ralph-loop)",
       "Bash(find:*)",
-      "Bash(git show-ref:*)"
+      "Bash(git show-ref:*)",
+      "Skill(project-planning:technical-project-manager)",
+      "Bash(gh issue list:*)",
+      "Bash(gh milestone:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue edit:*)"
     ]
   }
 }
