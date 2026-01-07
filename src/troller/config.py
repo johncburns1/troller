@@ -7,7 +7,29 @@ Configuration is loaded from multiple sources with the following priority:
 4. Default values defined here (least specific)
 """
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class ClaudeModelConfig(BaseSettings):
+    """Claude AI model configuration.
+
+    Attributes:
+        planning_model: Model for planning agent (defaults to Opus 4.5).
+        coding_model: Model for coding agent (defaults to Sonnet 4.5).
+        review_model: Model for review agent (defaults to Sonnet 4.5).
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="CLAUDE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    planning_model: str = "claude-opus-4-5-20251101"
+    coding_model: str = "claude-sonnet-4-5-20250929"
+    review_model: str = "claude-sonnet-4-5-20250929"
 
 
 class TemporalConfig(BaseSettings):
@@ -54,6 +76,7 @@ class Config(BaseSettings):
     Attributes:
         temporal: Temporal server configuration.
         github: GitHub API configuration.
+        claude: Claude AI model configuration.
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR).
     """
 
@@ -63,8 +86,9 @@ class Config(BaseSettings):
         extra="ignore",
     )
 
-    temporal: TemporalConfig = TemporalConfig()
-    github: GitHubConfig = GitHubConfig()
+    temporal: TemporalConfig = Field(default_factory=TemporalConfig)
+    github: GitHubConfig = Field(default_factory=GitHubConfig)
+    claude: ClaudeModelConfig = Field(default_factory=ClaudeModelConfig)
     log_level: str = "INFO"
 
 

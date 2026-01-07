@@ -27,6 +27,25 @@ class TestClaudeClient:
             ):
                 ClaudeClient()
 
+    def test_init_accepts_optional_model_parameter(self) -> None:
+        """ClaudeClient.__init__() accepts optional model parameter."""
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            client = ClaudeClient(model="claude-opus-4-5-20251101")
+            assert client._model == "claude-opus-4-5-20251101"
+
+    def test_init_stores_model_when_provided(self) -> None:
+        """ClaudeClient.__init__() stores model correctly when provided."""
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            client = ClaudeClient(model="custom-model")
+            assert hasattr(client, "_model")
+            assert client._model == "custom-model"
+
+    def test_init_defaults_model_to_none_when_not_provided(self) -> None:
+        """ClaudeClient.__init__() defaults model to None when not provided."""
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            client = ClaudeClient()
+            assert client._model is None
+
     @pytest.mark.asyncio
     async def test_query_yields_agent_sdk_messages(self) -> None:
         """query() yields messages from Agent SDK query."""
@@ -173,3 +192,83 @@ class TestClaudeClient:
                 # Verify default model
                 create_call = mock_anthropic.messages.create.call_args
                 assert create_call.kwargs["model"] == "claude-sonnet-4-5-20250929"
+
+    @pytest.mark.asyncio
+    async def test_structured_query_uses_instance_model_when_no_parameter(self) -> None:
+        """structured_query() uses instance model when no model parameter provided."""
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch(
+                "troller.worker.adapters.claude_client.Anthropic"
+            ) as mock_anthropic_class:
+                # Define test schema
+                class TestSchema(BaseModel):
+                    result: str
+
+                # Mock Anthropic client response
+                mock_anthropic = MagicMock()
+                mock_anthropic_class.return_value = mock_anthropic
+                mock_response = MagicMock()
+                mock_response.content = [MagicMock(text='{"result": "success"}')]
+                mock_anthropic.messages.create.return_value = mock_response
+
+                client = ClaudeClient(model="claude-opus-4-5-20251101")
+                await client.structured_query("Query", TestSchema)
+
+                # Verify instance model was used
+                create_call = mock_anthropic.messages.create.call_args
+                assert create_call.kwargs["model"] == "claude-opus-4-5-20251101"
+
+    @pytest.mark.asyncio
+    async def test_structured_query_parameter_overrides_instance_model(self) -> None:
+        """structured_query() parameter overrides instance model."""
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch(
+                "troller.worker.adapters.claude_client.Anthropic"
+            ) as mock_anthropic_class:
+                # Define test schema
+                class TestSchema(BaseModel):
+                    data: str
+
+                # Mock Anthropic client response
+                mock_anthropic = MagicMock()
+                mock_anthropic_class.return_value = mock_anthropic
+                mock_response = MagicMock()
+                mock_response.content = [MagicMock(text='{"data": "test"}')]
+                mock_anthropic.messages.create.return_value = mock_response
+
+                client = ClaudeClient(model="claude-opus-4-5-20251101")
+                await client.structured_query(
+                    "Query", TestSchema, model="claude-haiku-override"
+                )
+
+                # Verify parameter overrode instance model
+                create_call = mock_anthropic.messages.create.call_args
+                assert create_call.kwargs["model"] == "claude-haiku-override"
+
+    @pytest.mark.asyncio
+    async def test_structured_query_backward_compatible_no_model_specified(
+        self,
+    ) -> None:
+        """structured_query() works without model (backward compatibility)."""
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch(
+                "troller.worker.adapters.claude_client.Anthropic"
+            ) as mock_anthropic_class:
+                # Define test schema
+                class TestSchema(BaseModel):
+                    value: str
+
+                # Mock Anthropic client response
+                mock_anthropic = MagicMock()
+                mock_anthropic_class.return_value = mock_anthropic
+                mock_response = MagicMock()
+                mock_response.content = [MagicMock(text='{"value": "test"}')]
+                mock_anthropic.messages.create.return_value = mock_response
+
+                # Create client without model
+                client = ClaudeClient()
+                result = await client.structured_query("Query", TestSchema)
+
+                # Should still work and return valid result
+                assert isinstance(result, TestSchema)
+                assert result.value == "test"

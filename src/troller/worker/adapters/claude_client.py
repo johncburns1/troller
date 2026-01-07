@@ -23,8 +23,12 @@ class ClaudeClient:
     Authenticates using Anthropic API key from environment.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, model: str | None = None) -> None:
         """Initialize Claude client with API key authentication.
+
+        Args:
+            model: Optional default model to use for queries. If not specified,
+                queries will use the default model from structured_query.
 
         Raises:
             ValueError: If ANTHROPIC_API_KEY environment variable is not set.
@@ -36,6 +40,7 @@ class ClaudeClient:
         # Store API key for agent options and direct API calls
         self._api_key = api_key
         self._anthropic_client = Anthropic(api_key=api_key)
+        self._model = model
 
     async def query(
         self, prompt: str, options: ClaudeAgentOptions
@@ -71,7 +76,7 @@ class ClaudeClient:
         self,
         prompt: str,
         schema: type[BaseModel],
-        model: str = "claude-sonnet-4-5-20250929",
+        model: str | None = None,
         token_limit: int = 4096,
     ) -> BaseModel:
         """Query Claude with structured output guarantee.
@@ -82,7 +87,8 @@ class ClaudeClient:
         Args:
             prompt: The query prompt to send to Claude.
             schema: Pydantic model class defining the expected response structure.
-            model: Claude model to use (defaults to Sonnet 4.5).
+            model: Claude model to use. If not specified, uses instance model
+                (from __init__) or defaults to Sonnet 4.5.
             token_limit: Maximum tokens for the response (defaults to 4096).
 
         Returns:
@@ -101,10 +107,13 @@ class ClaudeClient:
             print(result.summary)
             ```
         """
+        # Use provided model, fallback to instance model, then to default
+        effective_model = model or self._model or "claude-sonnet-4-5-20250929"
+
         # Use structured output to guarantee valid schema
         # Note: response_format is passed via extra_body for type compatibility
         response = self._anthropic_client.messages.create(
-            model=model,
+            model=effective_model,
             max_tokens=token_limit,
             messages=[{"role": "user", "content": prompt}],
             extra_body={
