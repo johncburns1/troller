@@ -263,7 +263,7 @@ class TestPlanningService:
         mock_client.query = mock_query_response
 
         service = PlanningService(mock_client, mock_cloner)
-        plan = await service.generate_plan(
+        plan, llm_metadata = await service.generate_plan(
             issue_title="Add feature",
             issue_body="New feature needed",
             issue_number=42,
@@ -444,7 +444,7 @@ class TestPlanningService:
         mock_client.query = mock_query_response
 
         service = PlanningService(mock_client, mock_cloner)
-        plan = await service.generate_plan(
+        plan, llm_metadata = await service.generate_plan(
             issue_title="Test feature",
             issue_body="Implement test",
             issue_number=27,

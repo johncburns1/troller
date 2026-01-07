@@ -12,6 +12,7 @@ from github.Issue import Issue as GithubIssue
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
+from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.github_activities import fetch_issue
 from troller.worker.activities.planning_activities import run_planning_agent
@@ -40,6 +41,26 @@ We need to add user authentication to the application.
     mock_issue.labels = []
     mock_issue.html_url = "https://github.com/test-org/test-repo/issues/42"
     return mock_issue
+
+
+@pytest.fixture
+def expected_llm_metadata() -> LLMMetadata:
+    """Create expected LLM metadata for testing.
+
+    Returns:
+        LLMMetadata with realistic execution information.
+    """
+    return LLMMetadata(
+        total_cost_usd=0.15,
+        input_tokens=1000,
+        output_tokens=500,
+        duration_ms=5000,
+        duration_api_ms=4500,
+        num_turns=1,
+        model="claude-opus-4-5-20251101",
+        tools_used=["Skill", "Read", "Grep", "Glob"],
+        execution_flow="Invoked feature-planner skill, used Read(15), Grep(8)",
+    )
 
 
 @pytest.fixture
@@ -88,7 +109,9 @@ def expected_plan() -> Plan:
 
 @pytest.mark.asyncio
 async def test_planning_workflow_end_to_end(
-    mock_github_issue: MagicMock, expected_plan: Plan
+    mock_github_issue: MagicMock,
+    expected_plan: Plan,
+    expected_llm_metadata: LLMMetadata,
 ) -> None:
     """Workflow executes end-to-end: fetch_issue → run_planning_agent → returns Plan.
 
@@ -110,10 +133,12 @@ async def test_planning_workflow_end_to_end(
             mock_gh_client_class.return_value = mock_gh_client
             mock_gh_client.get_issue.return_value = mock_github_issue
 
-            # Setup planning service mock
+            # Setup planning service mock (returns tuple)
             mock_planning_service = MagicMock()
             mock_planning_service_class.return_value = mock_planning_service
-            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_llm_metadata)
+            )
 
             # Create workflow environment
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -183,9 +208,24 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
                 },
             )
 
+            # Create test LLM metadata
+            test_llm_metadata = LLMMetadata(
+                total_cost_usd=0.10,
+                input_tokens=800,
+                output_tokens=400,
+                duration_ms=4000,
+                duration_api_ms=3500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read"],
+                execution_flow="Invoked feature-planner skill",
+            )
+
             mock_planning_service = MagicMock()
             mock_planning_service_class.return_value = mock_planning_service
-            mock_planning_service.generate_plan = AsyncMock(return_value=test_plan)
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(test_plan, test_llm_metadata)
+            )
 
             # Create workflow environment and execute
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -254,9 +294,24 @@ async def test_planning_workflow_validates_step_structure() -> None:
                 metadata={"issue_number": 456},
             )
 
+            # Create test LLM metadata
+            test_llm_metadata = LLMMetadata(
+                total_cost_usd=0.12,
+                input_tokens=900,
+                output_tokens=450,
+                duration_ms=4500,
+                duration_api_ms=4000,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read", "Grep"],
+                execution_flow="Invoked feature-planner skill",
+            )
+
             mock_planning_service = MagicMock()
             mock_planning_service_class.return_value = mock_planning_service
-            mock_planning_service.generate_plan = AsyncMock(return_value=test_plan)
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(test_plan, test_llm_metadata)
+            )
 
             # Execute workflow
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -325,9 +380,24 @@ async def test_planning_workflow_with_optional_fields() -> None:
                 },
             )
 
+            # Create test LLM metadata
+            test_llm_metadata = LLMMetadata(
+                total_cost_usd=0.20,
+                input_tokens=1200,
+                output_tokens=600,
+                duration_ms=6000,
+                duration_api_ms=5500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read", "Grep", "Glob"],
+                execution_flow="Invoked feature-planner skill, used Read(20)",
+            )
+
             mock_planning_service = MagicMock()
             mock_planning_service_class.return_value = mock_planning_service
-            mock_planning_service.generate_plan = AsyncMock(return_value=test_plan)
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(test_plan, test_llm_metadata)
+            )
 
             # Execute workflow
             async with await WorkflowEnvironment.start_time_skipping() as env:

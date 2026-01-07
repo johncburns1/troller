@@ -12,6 +12,7 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from troller.domain.models.issue import Issue
+from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.github_activities import FetchIssueInput, fetch_issue
 from troller.worker.activities.planning_activities import (
@@ -63,7 +64,20 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                 created_at=datetime.now(),
                 metadata={"issue_number": 123},
             )
-            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
+            expected_metadata = LLMMetadata(
+                total_cost_usd=0.10,
+                input_tokens=800,
+                output_tokens=400,
+                duration_ms=4000,
+                duration_api_ms=3500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read"],
+                execution_flow="Invoked feature-planner skill",
+            )
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_metadata)
+            )
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -135,7 +149,20 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                 created_at=datetime.now(),
                 metadata={},
             )
-            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
+            expected_metadata = LLMMetadata(
+                total_cost_usd=0.10,
+                input_tokens=800,
+                output_tokens=400,
+                duration_ms=4000,
+                duration_api_ms=3500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read"],
+                execution_flow="Invoked feature-planner skill",
+            )
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_metadata)
+            )
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -204,7 +231,20 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
                 created_at=datetime.now(),
                 metadata={},
             )
-            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
+            expected_metadata = LLMMetadata(
+                total_cost_usd=0.10,
+                input_tokens=800,
+                output_tokens=400,
+                duration_ms=4000,
+                duration_api_ms=3500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read"],
+                execution_flow="Invoked feature-planner skill",
+            )
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_metadata)
+            )
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -273,7 +313,20 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                 created_at=datetime.now(),
                 metadata={},
             )
-            mock_planning_service.generate_plan = AsyncMock(return_value=expected_plan)
+            expected_metadata = LLMMetadata(
+                total_cost_usd=0.10,
+                input_tokens=800,
+                output_tokens=400,
+                duration_ms=4000,
+                duration_api_ms=3500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read"],
+                execution_flow="Invoked feature-planner skill",
+            )
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_metadata)
+            )
 
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
@@ -378,7 +431,20 @@ async def test_run_planning_agent_activity_returns_plan() -> None:
                 created_at=datetime.now(),
                 metadata={"issue_number": 123},
             )
-            mock_client.generate_plan = AsyncMock(return_value=expected_plan)
+            expected_metadata = LLMMetadata(
+                total_cost_usd=0.08,
+                input_tokens=600,
+                output_tokens=300,
+                duration_ms=3000,
+                duration_api_ms=2800,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill"],
+                execution_flow="Invoked feature-planner skill",
+            )
+            mock_client.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_metadata)
+            )
 
             # Test
             issue = Issue(
@@ -396,9 +462,14 @@ async def test_run_planning_agent_activity_returns_plan() -> None:
 
             result = await run_planning_agent(planning_input)
 
-            assert isinstance(result, Plan)
-            assert result.summary != ""
-            assert len(result.steps) > 0
-            assert all(isinstance(step, PlanStep) for step in result.steps)
-            assert result.created_at is not None
-            assert isinstance(result.metadata, dict)
+            from troller.worker.activities.planning_activities import (
+                PlanningActivityOutput,
+            )
+
+            assert isinstance(result, PlanningActivityOutput)
+            assert result.plan.summary != ""
+            assert len(result.plan.steps) > 0
+            assert all(isinstance(step, PlanStep) for step in result.plan.steps)
+            assert result.plan.created_at is not None
+            assert isinstance(result.plan.metadata, dict)
+            assert isinstance(result.llm_metadata, LLMMetadata)
