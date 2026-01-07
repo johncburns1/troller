@@ -23,40 +23,41 @@ gh issue view <issue-number>
 
 Identify acceptance criteria, dependencies, affected components.
 
-### 2. YAGNI Check - Is Work Actually Needed?
+### 2. YAGNI Validation & Codebase Analysis (Combined)
 
-**Before planning implementation, audit the current state:**
+**Single exploration pass that validates need and gathers context:**
 
 ```text
-Task(subagent_type="Explore", thoroughness="quick"):
-"Audit current implementation related to issue #<number>.
-Determine if the problem described actually exists.
-Find [specific components mentioned in issue].
-Check if functionality already works as described."
+Task(subagent_type="Explore", thoroughness="medium"):
+"Explore codebase for issue #<number>: [brief issue description]
+
+FIRST: Validate if work is needed
+- Find [specific components mentioned in issue]
+- Check if the problem/feature described actually exists or is already implemented
+- Determine if issue is valid or can be closed
+
+IF work is needed:
+- Find related files and existing patterns
+- Identify test strategies and similar implementations
+- Note architecture patterns being followed
+- Locate where changes should be made
+
+Return both YAGNI validation and implementation context."
 ```
 
 **Decision point:**
 
 - **If issue is already resolved or doesn't apply:** Report findings, recommend closing issue
-- **If work is needed:** Continue to step 3
+- **If work is needed:** Continue to step 3 (you already have the context)
 
-### 3. Deep Codebase Analysis
-
-```text
-Task(subagent_type="Explore", thoroughness="medium"):
-"Analyze codebase for implementing [feature/fix].
-Find related files, existing patterns, test strategies, and similar implementations.
-Identify architecture patterns being followed."
-```
-
-### 4. Apply Engineering Standards
+### 3. Apply Engineering Standards
 
 ```text
 Skill(engineering:engineering-standards)
 Skill(engineering:python-engineering)  # For Python projects
 ```
 
-### 5. Create Branch & Plan
+### 4. Create Branch & Plan
 
 **Create feature branch:**
 
@@ -84,7 +85,7 @@ TodoWrite([
 - Test tasks come BEFORE implementation tasks (TDD)
 - Include quality checks as explicit step
 
-### 6. Validate Plan
+### 5. Validate Plan
 
 Before presenting:
 
