@@ -84,15 +84,20 @@ TodoWrite([
 - Test tasks come BEFORE implementation tasks (TDD)
 - Include quality checks as explicit step
 
+### 6. Validate Plan
+
+Before presenting:
+- YAGNI audit: remove speculative/future work from plan
+- Flag unused code/fields found during exploration
+- Document assumptions
+
 ## Planning Output
 
-Present to user:
-
-- ✅ YAGNI validation result
-- ✅ Branch created (if work needed)
-- ✅ TodoWrite plan with specific tasks
-- ✅ Understanding of existing patterns
-- ✅ Architecture approach
+- YAGNI validation (proceed/skip + reason)
+- Branch created
+- TodoWrite plan
+- Key patterns/architecture
+- Assumptions/dead code (if any)
 
 ## Handoff to Implementation
 

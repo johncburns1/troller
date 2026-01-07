@@ -45,13 +45,21 @@ Ralph Wiggum iterates automatically (max 5):
 
 **Update TodoWrite as tasks complete.**
 
-**If max iterations exceeded:** Simplify and re-run.
+**Early termination:**
+- Exit early if tests + quality checks pass
+- If stuck (same errors 2+ times): simplify approach
+- If max iterations: review assumptions, break down task
 
 ### 4. Final QA
 
 ```bash
 uv run pytest && uv run ruff check --fix && uv run ruff format && uv run mypy src
 ```
+
+**Validate before commit:**
+- All TodoWrite tasks completed
+- No unrelated changes (git diff)
+- Remove dead code
 
 ### 5. Clean Commit
 

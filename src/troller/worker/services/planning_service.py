@@ -2,20 +2,20 @@
 
 This service orchestrates the plan generation workflow:
 1. Clone repository
-2. Explore codebase using Claude Agent SDK
-3. Generate implementation plan with structured output
+2. Invoke feature-planner skill via Claude Agent SDK
+3. Parse plan from skill output
 4. Clean up cloned repository
 """
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from claude_agent_sdk import ClaudeAgentOptions
 
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
-from troller.worker.services.planning_models import PlanResponse
 
 
 class PlanningService:
@@ -23,8 +23,8 @@ class PlanningService:
 
     This service uses ClaudeClient to:
     1. Clone the target repository
-    2. Explore the codebase with AI agent tools (Read, Glob, Grep)
-    3. Generate an informed implementation plan
+    2. Invoke the feature-planner skill via Agent SDK
+    3. Parse the plan from skill execution output
     4. Clean up cloned repository
 
     Coordinates repository management and plan generation workflow.
@@ -53,8 +53,8 @@ class PlanningService:
 
         This method atomically:
         1. Clones the target repository
-        2. Explores the codebase using AI agent tools
-        3. Generates an implementation plan with full context
+        2. Invokes feature-planner skill to create implementation plan
+        3. Parses plan from skill output
         4. Cleans up the cloned repository
 
         Args:
@@ -66,7 +66,7 @@ class PlanningService:
             target_branch: Branch to analyze (defaults to main/master).
 
         Returns:
-            Plan domain object with implementation steps informed by codebase analysis.
+            Plan domain object with implementation steps from skill execution.
 
         Raises:
             RuntimeError: If repository cloning or planning fails.
@@ -79,8 +79,8 @@ class PlanningService:
                 repo_owner, repo_name, target_branch
             )
 
-            # Step 2: Explore codebase and generate plan
-            plan = await self._generate_plan_with_context(
+            # Step 2: Invoke feature-planner skill and parse plan
+            plan = await self._generate_plan_with_skill(
                 repo_path, issue_title, issue_body, issue_number
             )
 
@@ -91,14 +91,14 @@ class PlanningService:
             if temp_dir and temp_dir.exists():
                 self._repo_cloner.cleanup(temp_dir)
 
-    async def _generate_plan_with_context(
+    async def _generate_plan_with_skill(
         self,
         repo_path: Path,
         issue_title: str,
         issue_body: str,
         issue_number: int,
     ) -> Plan:
-        """Generate implementation plan using codebase context via Agent SDK.
+        """Generate implementation plan by invoking feature-planner skill.
 
         Args:
             repo_path: Path to the cloned repository.
@@ -112,98 +112,133 @@ class PlanningService:
         Raises:
             RuntimeError: If plan generation fails.
         """
-        # Configure agent options
+        # Configure agent options to enable skills
         options = ClaudeAgentOptions(
             cwd=str(repo_path),
-            allowed_tools=["Read", "Bash", "Glob", "Grep"],
-            permission_mode="bypassPermissions",  # Auto-approve read-only operations
+            # Enable tools needed by feature-planner skill
+            allowed_tools=[
+                "Skill",  # Required to invoke skills
+                "Task",  # Skills use subagents
+                "TodoWrite",  # Skills create task lists
+                "Bash",  # Skills need git/gh commands
+                "Read",  # For reading code
+                "Grep",  # For searching code
+                "Glob",  # For finding files
+            ],
+            # Load global skills (feature-planner) and project skills
+            setting_sources=["user", "project"],
+            permission_mode="acceptEdits",  # Auto-approve skill operations
             system_prompt={
                 "type": "preset",
                 "preset": "claude_code",
-                "append": """You are an expert software architect analyzing GitHub issues.
-
-Your task is to:
-1. Explore the codebase structure and architecture
-2. Understand existing patterns and conventions
-3. Analyze the issue requirements
-4. Create a detailed, actionable implementation plan
-
-Be thorough in your codebase exploration to ensure the plan aligns with existing architecture.""",
             },
         )
 
-        # Phase 1: Explore the codebase
-        exploration_prompt = """Analyze this codebase to understand its structure:
+        # Invoke feature-planner skill via prompt
+        # The skill will be automatically invoked based on description matching
+        prompt = f"""Plan implementation for GitHub issue:
 
-1. Find and read key documentation files (README.md, ARCHITECTURE.md, CLAUDE.md, etc.)
-2. Identify the main directory structure and tech stack
-3. Understand the architecture pattern (hexagonal, layered, MVC, etc.)
-4. Find key entry points and core modules
-5. Identify coding conventions and patterns
+Issue #{issue_number}: {issue_title}
 
-Provide a concise summary of the codebase architecture and key findings."""
-
-        codebase_analysis = []
-        async for message in self._client.query(exploration_prompt, options):
-            if hasattr(message, "result") and message.result:
-                codebase_analysis.append(message.result)
-
-        architecture_summary = "\n".join(codebase_analysis)
-
-        # Phase 2: Generate the implementation plan with structured output
-        planning_prompt = f"""Based on the codebase analysis, create a detailed implementation plan for this GitHub issue.
-
-GITHUB ISSUE:
-Title: {issue_title}
-Description:
 {issue_body}
 
-CODEBASE ANALYSIS:
-{architecture_summary}
+Create a comprehensive implementation plan using Skill(feature-planner)"""
 
-Create a comprehensive implementation plan with:
-- A high-level summary of what needs to be done
-- Specific, actionable steps in logical order
-- File paths for files that will be modified (from the actual codebase)
-- Complexity estimates for each step (simple/moderate/complex)
-- Technical approach explaining architecture decisions and patterns
-- Testing strategy for validating the implementation
+        # Collect all messages from skill execution
+        messages = []
+        async for message in self._client.query(prompt, options):
+            messages.append(message)
 
-Requirements:
-- Steps should follow the existing architecture patterns identified in the analysis
-- Keep plans focused on the issue requirements
-- Order steps with dependencies in mind"""
+        # Parse plan from skill output
+        return self._parse_plan_from_messages(messages, issue_number)
 
-        # Use structured query for guaranteed schema compliance
-        # Use higher token limit for comprehensive plan generation
-        plan_response = await self._client.structured_query(
-            planning_prompt, PlanResponse, token_limit=50_000
-        )
+    def _parse_plan_from_messages(self, messages: list[Any], issue_number: int) -> Plan:
+        """Parse Plan domain object from skill execution messages.
 
-        # Cast to PlanResponse for type safety
-        assert isinstance(plan_response, PlanResponse)
-        plan_data: PlanResponse = plan_response
+        Extracts plan summary, steps, and metadata from the free-form
+        output of the feature-planner skill.
 
-        # Convert Pydantic response model to domain model
-        steps = [
-            PlanStep(
-                id=step.id,
-                description=step.description,
-                completed=step.completed,
-                related_files=step.related_files,
-                estimated_complexity=step.estimated_complexity,
-            )
-            for step in plan_data.steps
-        ]
+        Args:
+            messages: List of messages from skill execution.
+            issue_number: GitHub issue number for metadata.
+
+        Returns:
+            Plan domain object constructed from messages.
+        """
+        plan_text = self._extract_plan_text(messages)
+        steps = self._extract_steps_from_messages(messages)
+        summary = self._extract_summary(plan_text)
 
         return Plan(
-            summary=plan_data.summary,
+            summary=summary,
             steps=steps,
             created_at=datetime.now(),
             metadata={
                 "issue_number": issue_number,
-                "codebase_analysis": architecture_summary,
+                "skill_output": plan_text[:1000],  # Store first 1000 chars
             },
-            technical_approach=plan_data.technical_approach,
-            testing_strategy=plan_data.testing_strategy,
         )
+
+    def _extract_plan_text(self, messages: list[Any]) -> str:
+        """Extract all text content from assistant messages.
+
+        Args:
+            messages: List of messages from skill execution.
+
+        Returns:
+            Combined plan text from all assistant messages.
+        """
+        plan_text_parts = []
+
+        for message in messages:
+            if hasattr(message, "content"):
+                for block in message.content:
+                    if hasattr(block, "text"):
+                        plan_text_parts.append(block.text)
+
+        return "\n\n".join(plan_text_parts)
+
+    def _extract_steps_from_messages(self, messages: list[Any]) -> list[PlanStep]:
+        """Extract implementation steps from TodoWrite tool uses.
+
+        Args:
+            messages: List of messages from skill execution.
+
+        Returns:
+            List of PlanStep objects extracted from TodoWrite calls.
+        """
+        steps = []
+
+        for message in messages:
+            if hasattr(message, "content"):
+                for block in message.content:
+                    if hasattr(block, "name") and block.name == "TodoWrite":
+                        if hasattr(block, "input") and "todos" in block.input:
+                            for i, todo in enumerate(block.input["todos"]):
+                                step = PlanStep(
+                                    id=f"step-{i + 1}",
+                                    description=todo.get("content", ""),
+                                    completed=False,
+                                )
+                                steps.append(step)
+
+        return steps
+
+    def _extract_summary(self, plan_text: str) -> str:
+        """Extract plan summary from full plan text.
+
+        Finds the first non-empty, non-heading line as the summary.
+
+        Args:
+            plan_text: Full plan text from skill output.
+
+        Returns:
+            Extracted summary or default text.
+        """
+        summary_lines = [
+            line.strip()
+            for line in plan_text.split("\n")
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+        return summary_lines[0] if summary_lines else "Implementation plan"
