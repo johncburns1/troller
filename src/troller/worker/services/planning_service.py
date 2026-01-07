@@ -2,8 +2,8 @@
 
 This service orchestrates the plan generation workflow:
 1. Clone repository
-2. Invoke feature-planner skill via Claude Agent SDK
-3. Parse plan from skill output
+2. Invoke feature-planner skill via Claude Agent SDK with structured outputs
+3. Convert validated PlanResponse to Plan domain model
 4. Clean up cloned repository
 """
 
@@ -16,6 +16,7 @@ from claude_agent_sdk import ClaudeAgentOptions
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
+from troller.worker.services.planning_models import PlanResponse
 
 
 class PlanningService:
@@ -100,6 +101,9 @@ class PlanningService:
     ) -> Plan:
         """Generate implementation plan by invoking feature-planner skill.
 
+        This method uses Claude Agent SDK structured outputs to get a
+        validated PlanResponse object that matches our JSON schema.
+
         Args:
             repo_path: Path to the cloned repository.
             issue_title: Title of the GitHub issue.
@@ -110,9 +114,9 @@ class PlanningService:
             Plan domain object with implementation steps.
 
         Raises:
-            RuntimeError: If plan generation fails.
+            RuntimeError: If plan generation fails or returns invalid output.
         """
-        # Configure agent options to enable skills
+        # Configure agent options to enable skills with structured outputs
         options = ClaudeAgentOptions(
             cwd=str(repo_path),
             # Enable tools needed by feature-planner skill
@@ -132,6 +136,11 @@ class PlanningService:
                 "type": "preset",
                 "preset": "claude_code",
             },
+            # Configure structured outputs with PlanResponse schema
+            output_format={
+                "type": "json_schema",
+                "schema": PlanResponse.model_json_schema(),
+            },
         )
 
         # Invoke feature-planner skill via prompt
@@ -142,103 +151,65 @@ Issue #{issue_number}: {issue_title}
 
 {issue_body}
 
-Create a comprehensive implementation plan using Skill(feature-planner)"""
+Create a comprehensive implementation plan using Skill(feature-planner).
 
-        # Collect all messages from skill execution
-        messages = []
+Return a structured plan with:
+- summary: High-level description of what needs to be done
+- steps: Ordered list of implementation steps (with id, description, related_files, estimated_complexity)
+- technical_approach: Architecture decisions and patterns to use
+- testing_strategy: How to test the implementation"""
+
+        # Execute query and collect structured output
+        plan_response: PlanResponse | None = None
         async for message in self._client.query(prompt, options):
-            messages.append(message)
+            # Check for structured output in result message
+            if hasattr(message, "structured_output") and message.structured_output:
+                # Validate and parse the structured output
+                plan_response = PlanResponse.model_validate(message.structured_output)
+                break
 
-        # Parse plan from skill output
-        return self._parse_plan_from_messages(messages, issue_number)
+        if not plan_response:
+            raise RuntimeError("Planning agent did not return structured output")
 
-    def _parse_plan_from_messages(self, messages: list[Any], issue_number: int) -> Plan:
-        """Parse Plan domain object from skill execution messages.
+        # Convert PlanResponse to Plan domain model
+        return self._convert_to_domain_plan(plan_response, issue_number)
 
-        Extracts plan summary, steps, and metadata from the free-form
-        output of the feature-planner skill.
+    def _convert_to_domain_plan(
+        self, plan_response: PlanResponse, issue_number: int
+    ) -> Plan:
+        """Convert validated PlanResponse to Plan domain model.
 
         Args:
-            messages: List of messages from skill execution.
+            plan_response: Validated Pydantic model from structured output.
             issue_number: GitHub issue number for metadata.
 
         Returns:
-            Plan domain object constructed from messages.
+            Plan domain object with steps converted from PlanStepResponse.
         """
-        plan_text = self._extract_plan_text(messages)
-        steps = self._extract_steps_from_messages(messages)
-        summary = self._extract_summary(plan_text)
-
-        return Plan(
-            summary=summary,
-            steps=steps,
-            created_at=datetime.now(),
-            metadata={
-                "issue_number": issue_number,
-                "skill_output": plan_text[:1000],  # Store first 1000 chars
-            },
-        )
-
-    def _extract_plan_text(self, messages: list[Any]) -> str:
-        """Extract all text content from assistant messages.
-
-        Args:
-            messages: List of messages from skill execution.
-
-        Returns:
-            Combined plan text from all assistant messages.
-        """
-        plan_text_parts = []
-
-        for message in messages:
-            if hasattr(message, "content"):
-                for block in message.content:
-                    if hasattr(block, "text"):
-                        plan_text_parts.append(block.text)
-
-        return "\n\n".join(plan_text_parts)
-
-    def _extract_steps_from_messages(self, messages: list[Any]) -> list[PlanStep]:
-        """Extract implementation steps from TodoWrite tool uses.
-
-        Args:
-            messages: List of messages from skill execution.
-
-        Returns:
-            List of PlanStep objects extracted from TodoWrite calls.
-        """
-        steps = []
-
-        for message in messages:
-            if hasattr(message, "content"):
-                for block in message.content:
-                    if hasattr(block, "name") and block.name == "TodoWrite":
-                        if hasattr(block, "input") and "todos" in block.input:
-                            for i, todo in enumerate(block.input["todos"]):
-                                step = PlanStep(
-                                    id=f"step-{i + 1}",
-                                    description=todo.get("content", ""),
-                                    completed=False,
-                                )
-                                steps.append(step)
-
-        return steps
-
-    def _extract_summary(self, plan_text: str) -> str:
-        """Extract plan summary from full plan text.
-
-        Finds the first non-empty, non-heading line as the summary.
-
-        Args:
-            plan_text: Full plan text from skill output.
-
-        Returns:
-            Extracted summary or default text.
-        """
-        summary_lines = [
-            line.strip()
-            for line in plan_text.split("\n")
-            if line.strip() and not line.strip().startswith("#")
+        # Convert PlanStepResponse objects to PlanStep domain objects
+        # Now includes related_files and estimated_complexity as first-class attributes
+        steps = [
+            PlanStep(
+                id=step.id,
+                description=step.description,
+                completed=step.completed,
+                related_files=step.related_files,
+                estimated_complexity=step.estimated_complexity,
+            )
+            for step in plan_response.steps
         ]
 
-        return summary_lines[0] if summary_lines else "Implementation plan"
+        # Build metadata with issue reference
+        # Note: technical_approach and testing_strategy are now first-class Plan attributes
+        metadata: dict[str, Any] = {
+            "issue_number": issue_number,
+        }
+
+        return Plan(
+            summary=plan_response.summary,
+            steps=steps,
+            created_at=datetime.now(),
+            technical_approach=plan_response.technical_approach,
+            testing_strategy=plan_response.testing_strategy,
+            metadata=metadata,
+        )

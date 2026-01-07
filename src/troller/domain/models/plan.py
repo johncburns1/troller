@@ -3,9 +3,9 @@
 Pure business logic with no external dependencies.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -16,11 +16,15 @@ class PlanStep:
         id: Unique identifier for the step (e.g., 'step-1', 'step-2').
         description: What this step entails.
         completed: Whether this step has been completed.
+        related_files: Files that will be modified in this step.
+        estimated_complexity: Estimated complexity level of this step.
     """
 
     id: str
     description: str
     completed: bool
+    related_files: list[str] = field(default_factory=list)
+    estimated_complexity: Literal["simple", "moderate", "complex"] | None = None
 
 
 @dataclass(frozen=True)
@@ -31,10 +35,14 @@ class Plan:
         summary: High-level description of the plan.
         steps: Ordered list of implementation steps.
         created_at: When this plan was created.
-        metadata: Extensible metadata (issue_number, skill_output, etc.).
+        technical_approach: Architecture decisions, libraries, and patterns to use.
+        testing_strategy: How to test the implementation.
+        metadata: Extensible metadata for additional context (issue_number, etc.).
     """
 
     summary: str
     steps: list[PlanStep]
     created_at: datetime
-    metadata: dict[str, Any]
+    technical_approach: str | None = None
+    testing_strategy: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)

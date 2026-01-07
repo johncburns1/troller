@@ -11,26 +11,36 @@ from troller.worker.adapters.repo_cloner import RepoCloner
 from troller.worker.services.planning_service import PlanningService
 
 
-class MockAssistantMessage:
-    """Mock AssistantMessage with text content."""
+class MockStructuredOutputMessage:
+    """Mock message with structured_output attribute."""
 
-    def __init__(self, text: str):
-        self.content = [MockTextBlock(text)]
-
-
-class MockTextBlock:
-    """Mock TextBlock with text."""
-
-    def __init__(self, text: str):
-        self.text = text
+    def __init__(self, structured_output: dict | None = None):
+        self.structured_output = structured_output
 
 
-class MockToolUseBlock:
-    """Mock ToolUseBlock for TodoWrite."""
-
-    def __init__(self, name: str, input_data: dict):
-        self.name = name
-        self.input = input_data
+def create_mock_plan_response() -> dict:
+    """Create a mock PlanResponse-like dictionary for testing."""
+    return {
+        "summary": "Implement feature X with proper testing",
+        "steps": [
+            {
+                "id": "step-1",
+                "description": "Create domain model",
+                "completed": False,
+                "related_files": ["src/domain/models/feature.py"],
+                "estimated_complexity": "simple",
+            },
+            {
+                "id": "step-2",
+                "description": "Implement service layer",
+                "completed": False,
+                "related_files": ["src/services/feature_service.py"],
+                "estimated_complexity": "moderate",
+            },
+        ],
+        "technical_approach": "Use hexagonal architecture with domain-driven design",
+        "testing_strategy": "Unit tests for domain logic, integration tests for workflows",
+    }
 
 
 class TestPlanningService:
@@ -46,11 +56,11 @@ class TestPlanningService:
         )
         mock_cloner.cleanup = MagicMock()
 
-        # Mock Claude client with skill-based response
+        # Mock Claude client with structured output response
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            yield MockAssistantMessage("Plan created successfully")
+            yield MockStructuredOutputMessage(create_mock_plan_response())
 
         mock_client.query = mock_query_response
 
@@ -78,11 +88,11 @@ class TestPlanningService:
         )
         mock_cloner.cleanup = MagicMock()
 
-        # Mock Claude client
+        # Mock Claude client with structured output
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            yield MockAssistantMessage("Plan complete")
+            yield MockStructuredOutputMessage(create_mock_plan_response())
 
         mock_client.query = mock_query_response
 
@@ -149,7 +159,7 @@ class TestPlanningService:
 
         async def capture_options(prompt, options):
             captured_options.append(options)
-            yield MockAssistantMessage("Plan generated")
+            yield MockStructuredOutputMessage(create_mock_plan_response())
 
         mock_client.query = capture_options
 
@@ -183,7 +193,7 @@ class TestPlanningService:
 
         async def capture_options(prompt, options):
             captured_options.append(options)
-            yield MockAssistantMessage("Plan created")
+            yield MockStructuredOutputMessage(create_mock_plan_response())
 
         mock_client.query = capture_options
 
@@ -218,7 +228,7 @@ class TestPlanningService:
 
         async def count_query_calls(prompt, options):
             query_call_count[0] += 1
-            yield MockAssistantMessage("Plan complete")
+            yield MockStructuredOutputMessage(create_mock_plan_response())
 
         mock_client.query = count_query_calls
 
@@ -236,7 +246,7 @@ class TestPlanningService:
 
     @pytest.mark.asyncio
     async def test_generate_plan_returns_plan_with_metadata(self) -> None:
-        """generate_plan returns Plan with issue number in metadata."""
+        """generate_plan returns Plan with issue number and structured data as first-class attributes."""
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
@@ -244,14 +254,11 @@ class TestPlanningService:
         )
         mock_cloner.cleanup = MagicMock()
 
-        # Mock Claude client with realistic response
+        # Mock Claude client with structured output
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            # Simulate assistant response with plan text
-            yield MockAssistantMessage(
-                "## Implementation Plan\n\nAdd new feature X to the system."
-            )
+            yield MockStructuredOutputMessage(create_mock_plan_response())
 
         mock_client.query = mock_query_response
 
@@ -264,9 +271,24 @@ class TestPlanningService:
             repo_name="repo",
         )
 
-        # Verify plan structure
+        # Verify plan structure with first-class attributes
         assert isinstance(plan, Plan)
         assert plan.metadata["issue_number"] == 42
+        assert (
+            plan.technical_approach
+            == "Use hexagonal architecture with domain-driven design"
+        )
+        assert (
+            plan.testing_strategy
+            == "Unit tests for domain logic, integration tests for workflows"
+        )
+
+        # Verify steps have first-class attributes too
+        assert len(plan.steps) == 2
+        assert plan.steps[0].related_files == ["src/domain/models/feature.py"]
+        assert plan.steps[0].estimated_complexity == "simple"
+        assert plan.steps[1].related_files == ["src/services/feature_service.py"]
+        assert plan.steps[1].estimated_complexity == "moderate"
 
     @pytest.mark.asyncio
     async def test_generate_plan_passes_issue_to_prompt(self) -> None:
@@ -284,7 +306,7 @@ class TestPlanningService:
 
         async def capture_prompt(prompt, options):
             captured_prompts.append(prompt)
-            yield MockAssistantMessage("Plan complete")
+            yield MockStructuredOutputMessage(create_mock_plan_response())
 
         mock_client.query = capture_prompt
 
@@ -313,11 +335,11 @@ class TestPlanningService:
         )
         mock_cloner.cleanup = MagicMock()
 
-        # Mock Claude client
+        # Mock Claude client with structured output
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            yield MockAssistantMessage("Analysis")
+            yield MockStructuredOutputMessage(create_mock_plan_response())
 
         mock_client.query = mock_query_response
 
@@ -333,3 +355,70 @@ class TestPlanningService:
 
         # Verify clone_to_temp was called with target_branch
         mock_cloner.clone_to_temp.assert_called_once_with("owner", "repo", "develop")
+
+    @pytest.mark.asyncio
+    async def test_generate_plan_configures_structured_outputs(self) -> None:
+        """generate_plan configures output_format with PlanResponse schema."""
+        # Mock RepoCloner
+        mock_cloner = MagicMock(spec=RepoCloner)
+        mock_cloner.clone_to_temp = AsyncMock(
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+        )
+        mock_cloner.cleanup = MagicMock()
+
+        # Mock Claude client to capture options
+        mock_client = MagicMock(spec=ClaudeClient)
+        captured_options = []
+
+        async def capture_options(prompt, options):
+            captured_options.append(options)
+            yield MockStructuredOutputMessage(create_mock_plan_response())
+
+        mock_client.query = capture_options
+
+        service = PlanningService(mock_client, mock_cloner)
+        await service.generate_plan(
+            issue_title="Test",
+            issue_body="Body",
+            issue_number=1,
+            repo_owner="owner",
+            repo_name="repo",
+        )
+
+        # Verify output_format is configured with json_schema
+        assert len(captured_options) > 0
+        options = captured_options[0]
+        assert "output_format" in options.__dict__
+        assert options.output_format["type"] == "json_schema"
+        assert "schema" in options.output_format
+
+    @pytest.mark.asyncio
+    async def test_generate_plan_raises_error_when_no_structured_output(self) -> None:
+        """generate_plan raises RuntimeError when agent doesn't return structured output."""
+        # Mock RepoCloner
+        mock_cloner = MagicMock(spec=RepoCloner)
+        mock_cloner.clone_to_temp = AsyncMock(
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+        )
+        mock_cloner.cleanup = MagicMock()
+
+        # Mock Claude client that returns message without structured_output
+        mock_client = MagicMock(spec=ClaudeClient)
+
+        async def mock_query_response(*args, **kwargs):
+            yield MockStructuredOutputMessage(None)
+
+        mock_client.query = mock_query_response
+
+        service = PlanningService(mock_client, mock_cloner)
+
+        with pytest.raises(
+            RuntimeError, match="Planning agent did not return structured output"
+        ):
+            await service.generate_plan(
+                issue_title="Test",
+                issue_body="Body",
+                issue_number=1,
+                repo_owner="owner",
+                repo_name="repo",
+            )

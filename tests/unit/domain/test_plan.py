@@ -18,6 +18,8 @@ def test_plan_step_creation() -> None:
     assert step.id == "step-1"
     assert step.description == "Implement feature X"
     assert step.completed is False
+    assert step.related_files == []
+    assert step.estimated_complexity is None
 
 
 def test_plan_step_creation_completed() -> None:
@@ -31,6 +33,51 @@ def test_plan_step_creation_completed() -> None:
     assert step.id == "step-1"
     assert step.description == "Implement feature X"
     assert step.completed is True
+    assert step.related_files == []
+    assert step.estimated_complexity is None
+
+
+def test_plan_step_with_related_files() -> None:
+    """Create a PlanStep with related files."""
+    step = PlanStep(
+        id="step-1",
+        description="Update authentication logic",
+        completed=False,
+        related_files=["src/auth/login.py", "tests/test_auth.py"],
+    )
+
+    assert step.id == "step-1"
+    assert step.related_files == ["src/auth/login.py", "tests/test_auth.py"]
+
+
+def test_plan_step_with_complexity() -> None:
+    """Create a PlanStep with estimated complexity."""
+    step = PlanStep(
+        id="step-1",
+        description="Refactor database layer",
+        completed=False,
+        estimated_complexity="complex",
+    )
+
+    assert step.id == "step-1"
+    assert step.estimated_complexity == "complex"
+
+
+def test_plan_step_with_all_optional_fields() -> None:
+    """Create a PlanStep with all optional fields populated."""
+    step = PlanStep(
+        id="step-2",
+        description="Add validation",
+        completed=False,
+        related_files=["src/validators.py"],
+        estimated_complexity="simple",
+    )
+
+    assert step.id == "step-2"
+    assert step.description == "Add validation"
+    assert step.completed is False
+    assert step.related_files == ["src/validators.py"]
+    assert step.estimated_complexity == "simple"
 
 
 def test_plan_creation_with_required_fields() -> None:
@@ -45,14 +92,43 @@ def test_plan_creation_with_required_fields() -> None:
         summary="Implement user authentication",
         steps=steps,
         created_at=created_at,
-        metadata={},
     )
 
     assert plan.summary == "Implement user authentication"
     assert len(plan.steps) == 2
     assert plan.steps[0].id == "step-1"
     assert plan.created_at == created_at
+    assert plan.technical_approach is None
+    assert plan.testing_strategy is None
     assert plan.metadata == {}
+
+
+def test_plan_creation_with_technical_details() -> None:
+    """Create a Plan with technical approach and testing strategy."""
+    created_at = datetime.now(timezone.utc)
+    steps = [
+        PlanStep(
+            id="step-1",
+            description="Set up database models",
+            completed=False,
+        ),
+    ]
+
+    plan = Plan(
+        summary="Implement user authentication",
+        steps=steps,
+        created_at=created_at,
+        technical_approach="Use hexagonal architecture with JWT tokens",
+        testing_strategy="Unit tests for domain logic, integration tests for auth flow",
+    )
+
+    assert plan.summary == "Implement user authentication"
+    assert len(plan.steps) == 1
+    assert plan.technical_approach == "Use hexagonal architecture with JWT tokens"
+    assert (
+        plan.testing_strategy
+        == "Unit tests for domain logic, integration tests for auth flow"
+    )
 
 
 def test_plan_creation_with_rich_metadata() -> None:
@@ -73,7 +149,6 @@ def test_plan_creation_with_rich_metadata() -> None:
         metadata={
             "issue_number": 42,
             "repo": "test/repo",
-            "skill_output": "Full plan text from skill execution...",
         },
     )
 
@@ -82,8 +157,40 @@ def test_plan_creation_with_rich_metadata() -> None:
     assert plan.metadata == {
         "issue_number": 42,
         "repo": "test/repo",
-        "skill_output": "Full plan text from skill execution...",
     }
+
+
+def test_plan_with_all_fields() -> None:
+    """Create a Plan with all optional fields populated."""
+    created_at = datetime.now(timezone.utc)
+    steps = [
+        PlanStep(
+            id="step-1",
+            description="Implement auth endpoints",
+            completed=False,
+            related_files=["src/api/auth.py"],
+            estimated_complexity="moderate",
+        ),
+    ]
+
+    plan = Plan(
+        summary="Add JWT authentication",
+        steps=steps,
+        created_at=created_at,
+        technical_approach="Use PyJWT library with refresh tokens",
+        testing_strategy="Unit tests for token generation, integration tests for endpoints",
+        metadata={"issue_number": 123},
+    )
+
+    assert plan.summary == "Add JWT authentication"
+    assert plan.technical_approach == "Use PyJWT library with refresh tokens"
+    assert (
+        plan.testing_strategy
+        == "Unit tests for token generation, integration tests for endpoints"
+    )
+    assert plan.steps[0].related_files == ["src/api/auth.py"]
+    assert plan.steps[0].estimated_complexity == "moderate"
+    assert plan.metadata["issue_number"] == 123
 
 
 def test_plan_step_immutability() -> None:
@@ -104,7 +211,6 @@ def test_plan_immutability() -> None:
         summary="Test plan",
         steps=[],
         created_at=datetime.now(timezone.utc),
-        metadata={},
     )
 
     with pytest.raises(AttributeError):
