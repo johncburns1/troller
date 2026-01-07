@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh label create:*)",
+      "Bash(uv run ruff check:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(gh issue view:*)",
+      "Skill(engineering:engineering-standards)",
+      "Skill(engineering:python-engineering)",
+      "Bash(git checkout:*)",
+      "Bash(uv run ruff format:*)",
+      "Bash(git add:*)",
+      "Skill(feature-planner)",
+      "Skill(feature-implementation)",
+      "Skill(ralph-loop:ralph-loop)",
+      "Bash(find:*)",
+      "Bash(git show-ref:*)",
+      "Skill(project-planning:technical-project-manager)",
+      "Bash(gh issue list:*)",
+      "Bash(gh milestone:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(uv sync:*)"
+    ]
+  }
+}

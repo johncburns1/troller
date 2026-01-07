@@ -1,0 +1,81 @@
+"""Planning-related Temporal activities.
+
+Activities for AI-powered implementation planning.
+"""
+
+from pydantic import BaseModel, ConfigDict, Field
+from temporalio import activity
+
+from troller.config import config
+from troller.domain.models.issue import Issue
+from troller.domain.models.llm_metadata import LLMMetadata
+from troller.domain.models.plan import Plan
+from troller.worker.adapters.claude_client import ClaudeClient
+from troller.worker.adapters.repo_cloner import RepoCloner
+from troller.worker.services.planning_service import PlanningService
+
+
+class PlanningInput(BaseModel):
+    """Input parameters for run_planning_agent activity.
+
+    Attributes:
+        issue: GitHub issue to create a plan for.
+        repo_owner: GitHub repository owner.
+        repo_name: GitHub repository name.
+        target_branch: Branch to analyze (defaults to main/master if None).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    issue: Issue = Field(..., description="GitHub issue to create a plan for")
+    repo_owner: str = Field(..., description="GitHub repository owner")
+    repo_name: str = Field(..., description="GitHub repository name")
+    target_branch: str | None = Field(
+        default=None, description="Branch to analyze (defaults to main/master if None)"
+    )
+
+
+class PlanningActivityOutput(BaseModel):
+    """Output from run_planning_agent activity.
+
+    Attributes:
+        plan: The generated implementation plan.
+        llm_metadata: Metadata from LLM execution (cost, tokens, tools used, etc.).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    plan: Plan = Field(..., description="Generated implementation plan")
+    llm_metadata: LLMMetadata = Field(
+        ..., description="LLM execution metadata for observability"
+    )
+
+
+@activity.defn
+async def run_planning_agent(input: PlanningInput) -> PlanningActivityOutput:
+    """Run the planning agent to generate a codebase-aware implementation plan.
+
+    This activity clones the repository, explores the codebase, generates
+    a plan, and cleans up atomically within a single activity execution.
+
+    Args:
+        input: Planning parameters including issue and repository info.
+
+    Returns:
+        Activity output containing the plan and LLM execution metadata.
+    """
+    # Create adapters and planning service
+    claude_client = ClaudeClient(model=config.claude.planning_model)
+    repo_cloner = RepoCloner()
+    planning_service = PlanningService(claude_client, repo_cloner)
+
+    plan, llm_metadata = await planning_service.generate_plan(
+        issue_title=input.issue.title,
+        issue_body=input.issue.description,
+        issue_number=input.issue.number,
+        repo_owner=input.repo_owner,
+        repo_name=input.repo_name,
+        target_branch=input.target_branch,
+    )
+
+    return PlanningActivityOutput(plan=plan, llm_metadata=llm_metadata)
