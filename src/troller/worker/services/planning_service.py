@@ -17,6 +17,7 @@ from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
+from troller.worker.services.metadata_extractor import MetadataExtractor
 from troller.worker.services.planning_models import PlanResponse
 
 
@@ -32,15 +33,23 @@ class PlanningService:
     Coordinates repository management and plan generation workflow.
     """
 
-    def __init__(self, claude_client: ClaudeClient, repo_cloner: RepoCloner) -> None:
+    def __init__(
+        self,
+        claude_client: ClaudeClient,
+        repo_cloner: RepoCloner,
+        metadata_extractor: MetadataExtractor | None = None,
+    ) -> None:
         """Initialize planning service with Claude client and repo cloner.
 
         Args:
             claude_client: Generic Claude API client for queries.
             repo_cloner: Repository cloner adapter for git operations.
+            metadata_extractor: Metadata extractor for LLM execution data.
+                Defaults to new instance if not provided.
         """
         self._client = claude_client
         self._repo_cloner = repo_cloner
+        self._metadata_extractor = metadata_extractor or MetadataExtractor()
 
     async def generate_plan(
         self,
@@ -235,77 +244,6 @@ Return a structured plan with:
             based_on_commit=commit_sha,
         )
 
-    def _extract_tools_used(self, messages: list[Any]) -> list[str]:
-        """Extract all tool names used during execution.
-
-        Args:
-            messages: List of SDK messages from the query execution.
-
-        Returns:
-            Deduplicated list of tool names in order of first use.
-        """
-        tools_seen = []
-        tools_set = set()
-
-        for message in messages:
-            # Check if this is an AssistantMessage with content blocks
-            if hasattr(message, "content") and isinstance(message.content, list):
-                for block in message.content:
-                    # Check if this is a ToolUseBlock
-                    if hasattr(block, "name") and hasattr(block, "input"):
-                        tool_name = block.name
-                        if tool_name not in tools_set:
-                            tools_seen.append(tool_name)
-                            tools_set.add(tool_name)
-
-        return tools_seen
-
-    def _generate_execution_flow(
-        self, messages: list[Any], tools_used: list[str]
-    ) -> str:
-        """Generate auto-generated execution flow summary.
-
-        Args:
-            messages: List of SDK messages from the query execution.
-            tools_used: List of tools used during execution.
-
-        Returns:
-            Brief summary of execution flow (under 200 characters).
-        """
-        # Count tool usage
-        tool_counts: dict[str, int] = {}
-        for message in messages:
-            if hasattr(message, "content") and isinstance(message.content, list):
-                for block in message.content:
-                    if hasattr(block, "name") and hasattr(block, "input"):
-                        tool_name = block.name
-                        tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
-
-        # Build summary
-        summary_parts = []
-
-        # Check for skill invocation
-        if "Skill" in tool_counts:
-            summary_parts.append("Invoked feature-planner skill")
-
-        # Add top tool usage (limit to 3 most used)
-        top_tools = sorted(
-            [(name, count) for name, count in tool_counts.items() if name != "Skill"],
-            key=lambda x: x[1],
-            reverse=True,
-        )[:3]
-
-        if top_tools:
-            tool_usage = ", ".join([f"{name}({count})" for name, count in top_tools])
-            summary_parts.append(f"used {tool_usage}")
-
-        summary = (
-            ", ".join(summary_parts) if summary_parts else "Executed planning task"
-        )
-
-        # Truncate to 200 characters
-        return summary[:200]
-
     def _extract_llm_metadata(
         self, messages: list[Any], result_message: Any
     ) -> LLMMetadata:
@@ -318,47 +256,4 @@ Return a structured plan with:
         Returns:
             LLMMetadata object with extracted information.
         """
-        # Extract from ResultMessage
-        total_cost = None
-        duration_ms = 0
-        duration_api_ms = 0
-        num_turns = 0
-        input_tokens = None
-        output_tokens = None
-
-        if result_message:
-            total_cost = getattr(result_message, "total_cost_usd", None)
-            duration_ms = getattr(result_message, "duration_ms", 0)
-            duration_api_ms = getattr(result_message, "duration_api_ms", 0)
-            num_turns = getattr(result_message, "num_turns", 0)
-
-            # Parse usage dict for tokens
-            usage = getattr(result_message, "usage", None)
-            if usage and isinstance(usage, dict):
-                input_tokens = usage.get("input_tokens")
-                output_tokens = usage.get("output_tokens")
-
-        # Extract model from AssistantMessage
-        model = None
-        for msg in messages:
-            if hasattr(msg, "model"):
-                model = msg.model
-                break
-
-        # Track ALL tools used
-        tools_used = self._extract_tools_used(messages)
-
-        # Generate execution flow summary
-        execution_flow = self._generate_execution_flow(messages, tools_used)
-
-        return LLMMetadata(
-            total_cost_usd=total_cost,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            duration_ms=duration_ms,
-            duration_api_ms=duration_api_ms,
-            num_turns=num_turns,
-            model=model,
-            tools_used=tools_used,
-            execution_flow=execution_flow,
-        )
+        return self._metadata_extractor.extract_metadata(messages, result_message)
