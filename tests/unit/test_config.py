@@ -1,0 +1,85 @@
+"""Unit tests for configuration management."""
+
+import os
+from unittest.mock import patch
+
+
+from troller.config import ClaudeModelConfig, Config
+
+
+class TestClaudeModelConfig:
+    """Test suite for Claude model configuration."""
+
+    def test_claude_model_config_loads_from_environment(self) -> None:
+        """ClaudeModelConfig reads model settings from environment variables."""
+        with patch.dict(
+            os.environ,
+            {
+                "CLAUDE_PLANNING_MODEL": "claude-opus-test",
+                "CLAUDE_CODING_MODEL": "claude-sonnet-test",
+                "CLAUDE_REVIEW_MODEL": "claude-haiku-test",
+            },
+        ):
+            config = ClaudeModelConfig()
+            assert config.planning_model == "claude-opus-test"
+            assert config.coding_model == "claude-sonnet-test"
+            assert config.review_model == "claude-haiku-test"
+
+    def test_claude_model_config_defaults_to_opus_for_planning(self) -> None:
+        """ClaudeModelConfig defaults to Opus 4.5 for planning model."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = ClaudeModelConfig()
+            assert config.planning_model == "claude-opus-4-5-20251101"
+
+    def test_claude_model_config_defaults_to_sonnet_for_coding(self) -> None:
+        """ClaudeModelConfig defaults to Sonnet 4.5 for coding model."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = ClaudeModelConfig()
+            assert config.coding_model == "claude-sonnet-4-5-20250929"
+
+    def test_claude_model_config_defaults_to_sonnet_for_review(self) -> None:
+        """ClaudeModelConfig defaults to Sonnet 4.5 for review model."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = ClaudeModelConfig()
+            assert config.review_model == "claude-sonnet-4-5-20250929"
+
+    def test_claude_model_config_allows_independent_configuration(self) -> None:
+        """ClaudeModelConfig allows each model type to be configured independently."""
+        with patch.dict(
+            os.environ,
+            {
+                "CLAUDE_PLANNING_MODEL": "custom-planning",
+                # Don't set CLAUDE_CODING_MODEL - should use default
+                "CLAUDE_REVIEW_MODEL": "custom-review",
+            },
+        ):
+            config = ClaudeModelConfig()
+            assert config.planning_model == "custom-planning"
+            assert config.coding_model == "claude-sonnet-4-5-20250929"  # default
+            assert config.review_model == "custom-review"
+
+
+class TestConfig:
+    """Test suite for main application configuration."""
+
+    def test_config_includes_claude_model_config(self) -> None:
+        """Config includes claude field with ClaudeModelConfig."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = Config()
+            assert hasattr(config, "claude")
+            assert isinstance(config.claude, ClaudeModelConfig)
+
+    def test_config_claude_uses_environment_variables(self) -> None:
+        """Config.claude respects CLAUDE_* environment variables."""
+        with patch.dict(
+            os.environ,
+            {
+                "CLAUDE_PLANNING_MODEL": "env-planning",
+                "CLAUDE_CODING_MODEL": "env-coding",
+                "CLAUDE_REVIEW_MODEL": "env-review",
+            },
+        ):
+            config = Config()
+            assert config.claude.planning_model == "env-planning"
+            assert config.claude.coding_model == "env-coding"
+            assert config.claude.review_model == "env-review"

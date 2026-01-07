@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from troller.config import ClaudeModelConfig
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.planning_activities import (
     PlanningInput,
@@ -211,3 +212,112 @@ class TestRunPlanningAgent:
                 assert result.steps[2].description == "Add tests"
                 assert result.created_at == datetime(2025, 1, 1, 12, 0, 0)
                 assert result.metadata == {"issue_number": 999, "custom_field": "value"}
+
+    @pytest.mark.asyncio
+    async def test_run_planning_agent_passes_config_model_to_claude_client(
+        self,
+    ) -> None:
+        """run_planning_agent passes config.claude.planning_model to ClaudeClient."""
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch(
+                "troller.worker.activities.planning_activities.ClaudeClient"
+            ) as mock_client_class:
+                with patch(
+                    "troller.worker.activities.planning_activities.config"
+                ) as mock_config:
+                    # Setup mock config
+                    mock_claude_config = ClaudeModelConfig()
+                    mock_claude_config.planning_model = "claude-opus-custom"
+                    mock_config.claude = mock_claude_config
+
+                    # Setup mock client and service
+                    mock_client = MagicMock()
+                    mock_client_class.return_value = mock_client
+
+                    with patch(
+                        "troller.worker.activities.planning_activities.PlanningService"
+                    ) as mock_service_class:
+                        mock_service = MagicMock()
+                        mock_service_class.return_value = mock_service
+                        mock_plan = Plan(
+                            summary="Test",
+                            steps=[],
+                            created_at=datetime.now(),
+                            metadata={},
+                        )
+                        mock_service.generate_plan = AsyncMock(return_value=mock_plan)
+
+                        # Test
+                        issue = Issue(
+                            number=1,
+                            title="Test",
+                            description="Test",
+                            labels=[],
+                            url="https://github.com/test/test/issues/1",
+                        )
+                        planning_input = PlanningInput(
+                            issue=issue, repo_owner="test", repo_name="test"
+                        )
+                        await run_planning_agent(planning_input)
+
+                        # Verify ClaudeClient was created with planning model
+                        mock_client_class.assert_called_once_with(
+                            model="claude-opus-custom"
+                        )
+
+    @pytest.mark.asyncio
+    async def test_run_planning_agent_uses_environment_variable_for_model(self) -> None:
+        """run_planning_agent respects CLAUDE_PLANNING_MODEL environment variable."""
+        with patch.dict(
+            os.environ,
+            {
+                "ANTHROPIC_API_KEY": "test-key",
+                "CLAUDE_PLANNING_MODEL": "claude-opus-from-env",
+            },
+        ):
+            with patch(
+                "troller.worker.activities.planning_activities.ClaudeClient"
+            ) as mock_client_class:
+                with patch(
+                    "troller.worker.activities.planning_activities.config"
+                ) as mock_config:
+                    # Setup mock config to reflect environment variable
+                    mock_claude_config = ClaudeModelConfig(
+                        planning_model="claude-opus-from-env"
+                    )
+                    mock_config.claude = mock_claude_config
+
+                    # Setup mock client and service
+                    mock_client = MagicMock()
+                    mock_client_class.return_value = mock_client
+
+                    with patch(
+                        "troller.worker.activities.planning_activities.PlanningService"
+                    ) as mock_service_class:
+                        mock_service = MagicMock()
+                        mock_service_class.return_value = mock_service
+                        mock_plan = Plan(
+                            summary="Test",
+                            steps=[],
+                            created_at=datetime.now(),
+                            metadata={},
+                        )
+                        mock_service.generate_plan = AsyncMock(return_value=mock_plan)
+
+                        # Test
+                        issue = Issue(
+                            number=1,
+                            title="Test",
+                            description="Test",
+                            labels=[],
+                            url="https://github.com/test/test/issues/1",
+                        )
+                        planning_input = PlanningInput(
+                            issue=issue, repo_owner="test", repo_name="test"
+                        )
+                        await run_planning_agent(planning_input)
+
+                        # Verify ClaudeClient was created with environment model
+                        mock_client_class.assert_called_once_with(
+                            model="claude-opus-from-env"
+                        )
