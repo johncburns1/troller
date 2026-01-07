@@ -13,6 +13,7 @@ from typing import Any
 
 from claude_agent_sdk import ClaudeAgentOptions
 
+from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
@@ -49,7 +50,7 @@ class PlanningService:
         repo_owner: str,
         repo_name: str,
         target_branch: str | None = None,
-    ) -> Plan:
+    ) -> tuple[Plan, LLMMetadata]:
         """Generate a codebase-aware implementation plan from a GitHub issue.
 
         This method atomically:
@@ -67,7 +68,7 @@ class PlanningService:
             target_branch: Branch to analyze (defaults to main/master).
 
         Returns:
-            Plan domain object with implementation steps from skill execution.
+            Tuple of (Plan domain object, LLM execution metadata).
 
         Raises:
             RuntimeError: If repository cloning or planning fails.
@@ -81,11 +82,11 @@ class PlanningService:
             )
 
             # Step 2: Invoke feature-planner skill and parse plan
-            plan = await self._generate_plan_with_skill(
+            plan, llm_metadata = await self._generate_plan_with_skill(
                 repo_path, issue_title, issue_body, issue_number, commit_sha
             )
 
-            return plan
+            return plan, llm_metadata
 
         finally:
             # Step 3: Always cleanup, even if planning fails
@@ -99,7 +100,7 @@ class PlanningService:
         issue_body: str,
         issue_number: int,
         commit_sha: str,
-    ) -> Plan:
+    ) -> tuple[Plan, LLMMetadata]:
         """Generate implementation plan by invoking feature-planner skill.
 
         This method uses Claude Agent SDK structured outputs to get a
@@ -113,7 +114,7 @@ class PlanningService:
             commit_sha: Git commit SHA the repository is at.
 
         Returns:
-            Plan domain object with implementation steps.
+            Tuple of (Plan domain object, LLM execution metadata).
 
         Raises:
             RuntimeError: If plan generation fails or returns invalid output.
@@ -161,23 +162,39 @@ Return a structured plan with:
 - technical_approach: Architecture decisions and patterns to use
 - testing_strategy: How to test the implementation"""
 
-        # Execute query and collect structured output
+        # Execute query and collect ALL messages for metadata extraction
+        all_messages: list[Any] = []
         plan_response: PlanResponse | None = None
+        result_message: Any = None
+
         async for message in self._client.query(prompt, options):
-            # Check for structured output in result message
+            all_messages.append(message)
+
+            # Check for structured output
             if hasattr(message, "structured_output") and message.structured_output:
                 # Validate and parse the structured output
                 plan_response = PlanResponse.model_validate(message.structured_output)
-                break
+
+            # Check for result message with metadata
+            if hasattr(message, "subtype"):
+                result_message = message
 
         if not plan_response:
             raise RuntimeError("Planning agent did not return structured output")
 
+        # Extract metadata from collected messages
+        llm_metadata = self._extract_llm_metadata(all_messages, result_message)
+
         # Convert PlanResponse to Plan domain model
-        return self._convert_to_domain_plan(plan_response, issue_number, commit_sha)
+        plan = self._convert_to_domain_plan(plan_response, issue_number, commit_sha)
+
+        return plan, llm_metadata
 
     def _convert_to_domain_plan(
-        self, plan_response: PlanResponse, issue_number: int, commit_sha: str
+        self,
+        plan_response: PlanResponse,
+        issue_number: int,
+        commit_sha: str,
     ) -> Plan:
         """Convert validated PlanResponse to Plan domain model.
 
@@ -216,4 +233,132 @@ Return a structured plan with:
             testing_strategy=plan_response.testing_strategy,
             metadata=metadata,
             based_on_commit=commit_sha,
+        )
+
+    def _extract_tools_used(self, messages: list[Any]) -> list[str]:
+        """Extract all tool names used during execution.
+
+        Args:
+            messages: List of SDK messages from the query execution.
+
+        Returns:
+            Deduplicated list of tool names in order of first use.
+        """
+        tools_seen = []
+        tools_set = set()
+
+        for message in messages:
+            # Check if this is an AssistantMessage with content blocks
+            if hasattr(message, "content") and isinstance(message.content, list):
+                for block in message.content:
+                    # Check if this is a ToolUseBlock
+                    if hasattr(block, "name") and hasattr(block, "input"):
+                        tool_name = block.name
+                        if tool_name not in tools_set:
+                            tools_seen.append(tool_name)
+                            tools_set.add(tool_name)
+
+        return tools_seen
+
+    def _generate_execution_flow(
+        self, messages: list[Any], tools_used: list[str]
+    ) -> str:
+        """Generate auto-generated execution flow summary.
+
+        Args:
+            messages: List of SDK messages from the query execution.
+            tools_used: List of tools used during execution.
+
+        Returns:
+            Brief summary of execution flow (under 200 characters).
+        """
+        # Count tool usage
+        tool_counts: dict[str, int] = {}
+        for message in messages:
+            if hasattr(message, "content") and isinstance(message.content, list):
+                for block in message.content:
+                    if hasattr(block, "name") and hasattr(block, "input"):
+                        tool_name = block.name
+                        tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+
+        # Build summary
+        summary_parts = []
+
+        # Check for skill invocation
+        if "Skill" in tool_counts:
+            summary_parts.append("Invoked feature-planner skill")
+
+        # Add top tool usage (limit to 3 most used)
+        top_tools = sorted(
+            [(name, count) for name, count in tool_counts.items() if name != "Skill"],
+            key=lambda x: x[1],
+            reverse=True,
+        )[:3]
+
+        if top_tools:
+            tool_usage = ", ".join([f"{name}({count})" for name, count in top_tools])
+            summary_parts.append(f"used {tool_usage}")
+
+        summary = (
+            ", ".join(summary_parts) if summary_parts else "Executed planning task"
+        )
+
+        # Truncate to 200 characters
+        return summary[:200]
+
+    def _extract_llm_metadata(
+        self, messages: list[Any], result_message: Any
+    ) -> LLMMetadata:
+        """Extract LLM metadata from SDK messages and result.
+
+        Args:
+            messages: List of SDK messages from the query execution.
+            result_message: The final ResultMessage with cost and usage info.
+
+        Returns:
+            LLMMetadata object with extracted information.
+        """
+        # Extract from ResultMessage
+        total_cost = None
+        duration_ms = 0
+        duration_api_ms = 0
+        num_turns = 0
+        input_tokens = None
+        output_tokens = None
+
+        if result_message:
+            total_cost = getattr(result_message, "total_cost_usd", None)
+            duration_ms = getattr(result_message, "duration_ms", 0)
+            duration_api_ms = getattr(result_message, "duration_api_ms", 0)
+            num_turns = getattr(result_message, "num_turns", 0)
+
+            # Parse usage dict for tokens
+            usage = getattr(result_message, "usage", None)
+            if usage and isinstance(usage, dict):
+                input_tokens = usage.get("input_tokens")
+                output_tokens = usage.get("output_tokens")
+
+        # Extract model from AssistantMessage
+        model = None
+        for msg in messages:
+            if hasattr(msg, "model"):
+                model = msg.model
+                break
+
+        # Track ALL tools used
+        tools_used = self._extract_tools_used(messages)
+
+        # Generate execution flow summary
+        execution_flow = self._generate_execution_flow(messages, tools_used)
+
+        return LLMMetadata(
+            total_cost_usd=total_cost,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            duration_ms=duration_ms,
+            duration_api_ms=duration_api_ms,
+            num_turns=num_turns,
+            model=model,
+            tools_used=tools_used,
+            execution_flow=execution_flow,
         )

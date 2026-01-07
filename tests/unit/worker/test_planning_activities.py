@@ -8,8 +8,10 @@ import pytest
 
 from troller.config import ClaudeModelConfig
 from troller.domain.models.issue import Issue
+from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.planning_activities import (
+    PlanningActivityOutput,
     PlanningInput,
     run_planning_agent,
 )
@@ -29,7 +31,7 @@ class TestRunPlanningAgent:
                 mock_service = MagicMock()
                 mock_service_class.return_value = mock_service
 
-                # Mock plan
+                # Mock plan and metadata
                 expected_plan = Plan(
                     summary="Test implementation plan",
                     steps=[
@@ -42,7 +44,20 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={"issue_number": 42},
                 )
-                mock_service.generate_plan = AsyncMock(return_value=expected_plan)
+                expected_metadata = LLMMetadata(
+                    total_cost_usd=0.10,
+                    input_tokens=800,
+                    output_tokens=400,
+                    duration_ms=4000,
+                    duration_api_ms=3500,
+                    num_turns=1,
+                    model="claude-opus-4-5-20251101",
+                    tools_used=["Skill", "Read"],
+                    execution_flow="Invoked feature-planner skill",
+                )
+                mock_service.generate_plan = AsyncMock(
+                    return_value=(expected_plan, expected_metadata)
+                )
 
                 # Test
                 issue = Issue(
@@ -60,8 +75,9 @@ class TestRunPlanningAgent:
                 result = await run_planning_agent(planning_input)
 
                 # Verify
-                assert isinstance(result, Plan)
-                assert result == expected_plan
+                assert isinstance(result, PlanningActivityOutput)
+                assert result.plan == expected_plan
+                assert result.llm_metadata == expected_metadata
 
     @pytest.mark.asyncio
     async def test_run_planning_agent_calls_service_with_issue_details(self) -> None:
@@ -80,7 +96,20 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={},
                 )
-                mock_service.generate_plan = AsyncMock(return_value=mock_plan)
+                mock_metadata = LLMMetadata(
+                    total_cost_usd=0.05,
+                    input_tokens=500,
+                    output_tokens=250,
+                    duration_ms=2000,
+                    duration_api_ms=1800,
+                    num_turns=1,
+                    model="claude-opus-4-5-20251101",
+                    tools_used=["Skill"],
+                    execution_flow="Invoked feature-planner skill",
+                )
+                mock_service.generate_plan = AsyncMock(
+                    return_value=(mock_plan, mock_metadata)
+                )
 
                 # Test
                 issue = Issue(
@@ -125,7 +154,20 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={},
                 )
-                mock_service.generate_plan = AsyncMock(return_value=mock_plan)
+                mock_metadata = LLMMetadata(
+                    total_cost_usd=0.03,
+                    input_tokens=300,
+                    output_tokens=150,
+                    duration_ms=1500,
+                    duration_api_ms=1300,
+                    num_turns=1,
+                    model="claude-opus-4-5-20251101",
+                    tools_used=[],
+                    execution_flow="Executed planning task",
+                )
+                mock_service.generate_plan = AsyncMock(
+                    return_value=(mock_plan, mock_metadata)
+                )
 
                 # Test
                 issue = Issue(
@@ -143,7 +185,7 @@ class TestRunPlanningAgent:
                 result = await run_planning_agent(planning_input)
 
                 # Verify - should still work with empty description
-                assert isinstance(result, Plan)
+                assert isinstance(result, PlanningActivityOutput)
                 mock_service.generate_plan.assert_awaited_once_with(
                     issue_title="Issue with no description",
                     issue_body="",
@@ -187,7 +229,20 @@ class TestRunPlanningAgent:
                     created_at=datetime(2025, 1, 1, 12, 0, 0),
                     metadata={"issue_number": 999, "custom_field": "value"},
                 )
-                mock_service.generate_plan = AsyncMock(return_value=expected_plan)
+                expected_metadata = LLMMetadata(
+                    total_cost_usd=0.25,
+                    input_tokens=1500,
+                    output_tokens=750,
+                    duration_ms=7000,
+                    duration_api_ms=6500,
+                    num_turns=1,
+                    model="claude-opus-4-5-20251101",
+                    tools_used=["Skill", "Read", "Grep", "Glob"],
+                    execution_flow="Invoked feature-planner skill, used Read(25)",
+                )
+                mock_service.generate_plan = AsyncMock(
+                    return_value=(expected_plan, expected_metadata)
+                )
 
                 # Test
                 issue = Issue(
@@ -205,13 +260,16 @@ class TestRunPlanningAgent:
                 result = await run_planning_agent(planning_input)
 
                 # Verify all fields preserved
-                assert result.summary == "Comprehensive implementation plan"
-                assert len(result.steps) == 3
-                assert result.steps[0].id == "step-1"
-                assert result.steps[1].description == "Implement core logic"
-                assert result.steps[2].description == "Add tests"
-                assert result.created_at == datetime(2025, 1, 1, 12, 0, 0)
-                assert result.metadata == {"issue_number": 999, "custom_field": "value"}
+                assert result.plan.summary == "Comprehensive implementation plan"
+                assert len(result.plan.steps) == 3
+                assert result.plan.steps[0].id == "step-1"
+                assert result.plan.steps[1].description == "Implement core logic"
+                assert result.plan.steps[2].description == "Add tests"
+                assert result.plan.created_at == datetime(2025, 1, 1, 12, 0, 0)
+                assert result.plan.metadata == {
+                    "issue_number": 999,
+                    "custom_field": "value",
+                }
 
     @pytest.mark.asyncio
     async def test_run_planning_agent_passes_config_model_to_claude_client(
@@ -245,7 +303,20 @@ class TestRunPlanningAgent:
                             created_at=datetime.now(),
                             metadata={},
                         )
-                        mock_service.generate_plan = AsyncMock(return_value=mock_plan)
+                        mock_metadata = LLMMetadata(
+                            total_cost_usd=0.01,
+                            input_tokens=100,
+                            output_tokens=50,
+                            duration_ms=1000,
+                            duration_api_ms=900,
+                            num_turns=1,
+                            model="claude-opus-custom",
+                            tools_used=[],
+                            execution_flow="Executed",
+                        )
+                        mock_service.generate_plan = AsyncMock(
+                            return_value=(mock_plan, mock_metadata)
+                        )
 
                         # Test
                         issue = Issue(
@@ -302,7 +373,20 @@ class TestRunPlanningAgent:
                             created_at=datetime.now(),
                             metadata={},
                         )
-                        mock_service.generate_plan = AsyncMock(return_value=mock_plan)
+                        mock_metadata = LLMMetadata(
+                            total_cost_usd=0.01,
+                            input_tokens=100,
+                            output_tokens=50,
+                            duration_ms=1000,
+                            duration_api_ms=900,
+                            num_turns=1,
+                            model="claude-opus-from-env",
+                            tools_used=[],
+                            execution_flow="Executed",
+                        )
+                        mock_service.generate_plan = AsyncMock(
+                            return_value=(mock_plan, mock_metadata)
+                        )
 
                         # Test
                         issue = Issue(

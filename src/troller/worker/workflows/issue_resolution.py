@@ -65,7 +65,7 @@ class IssueResolutionWorkflow:
         )
 
         # Run planning agent (may take a few minutes due to repo cloning and exploration)
-        self._plan = await workflow.execute_activity(
+        planning_output = await workflow.execute_activity(
             run_planning_agent,
             PlanningInput(
                 issue=self._issue,
@@ -82,6 +82,9 @@ class IssueResolutionWorkflow:
                 maximum_interval=timedelta(seconds=30),
             ),
         )
+
+        # Extract plan from activity output
+        self._plan = planning_output.plan
 
         # Return the plan (guaranteed to be set by activity execution)
         assert self._plan is not None
