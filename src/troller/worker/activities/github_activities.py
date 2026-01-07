@@ -6,8 +6,8 @@ Activities for fetching and interacting with GitHub issues.
 from pydantic import BaseModel, ConfigDict, Field
 from temporalio import activity
 
+from troller.domain.models.issue import Issue
 from troller.worker.adapters.github_client import GitHubClient
-from troller.worker.workflows.data_structures import Issue
 
 
 class FetchIssueInput(BaseModel):

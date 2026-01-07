@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from troller.config import ClaudeModelConfig
+from troller.domain.models.issue import Issue
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.planning_activities import (
     PlanningInput,
     run_planning_agent,
 )
-from troller.worker.workflows.data_structures import Issue
 
 
 class TestRunPlanningAgent:
