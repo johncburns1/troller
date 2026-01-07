@@ -10,12 +10,17 @@ Ralph Wiggum iteration loops with TDD and quality gates.
 
 ## Workflow
 
-### 1. Read Existing Code
+### 1. Read Specific Files from Plan
+
+**IMPORTANT:** Only read files explicitly identified by the planner. Do NOT perform broad codebase exploration.
 
 ```bash
+# Read ONLY the specific files called out in the plan
 Read(file_path="/path/to/file.py")
 Read(file_path="/path/to/test_file.py")
 ```
+
+Trust the planning exploration - you have all the context you need.
 
 ### 2. Load Engineering Standards
 
@@ -46,6 +51,7 @@ Ralph Wiggum iterates automatically (max 5):
 **Update TodoWrite as tasks complete.**
 
 **Early termination:**
+
 - Exit early if tests + quality checks pass
 - If stuck (same errors 2+ times): simplify approach
 - If max iterations: review assumptions, break down task
@@ -57,6 +63,7 @@ uv run pytest && uv run ruff check --fix && uv run ruff format && uv run mypy sr
 ```
 
 **Validate before commit:**
+
 - All TodoWrite tasks completed
 - No unrelated changes (git diff)
 - Remove dead code
