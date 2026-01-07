@@ -28,7 +28,7 @@ Identify acceptance criteria, dependencies, affected components.
 **Before planning implementation, audit the current state:**
 
 ```text
-Task(subagent_type="Explore", thoroughness="very thorough"):
+Task(subagent_type="Explore", thoroughness="quick"):
 "Audit current implementation related to issue #<number>.
 Determine if the problem described actually exists.
 Find [specific components mentioned in issue].
@@ -43,7 +43,7 @@ Check if functionality already works as described."
 ### 3. Deep Codebase Analysis
 
 ```text
-Task(subagent_type="Explore", thoroughness="very thorough"):
+Task(subagent_type="Explore", thoroughness="medium"):
 "Analyze codebase for implementing [feature/fix].
 Find related files, existing patterns, test strategies, and similar implementations.
 Identify architecture patterns being followed."
@@ -87,6 +87,7 @@ TodoWrite([
 ### 6. Validate Plan
 
 Before presenting:
+
 - YAGNI audit: remove speculative/future work from plan
 - Flag unused code/fields found during exploration
 - Document assumptions
@@ -96,9 +97,12 @@ Before presenting:
 - YAGNI validation (proceed/skip + reason)
 - Branch created
 - TodoWrite plan
+- **Specific files to modify** (with paths for implementation)
 - Key patterns/architecture
 - Assumptions/dead code (if any)
 
 ## Handoff to Implementation
 
 Once user confirms plan, use `feature-implementation` skill to execute.
+
+**CRITICAL:** List exact file paths for implementation agent to read.
