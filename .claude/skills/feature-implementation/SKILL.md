@@ -1,7 +1,7 @@
 ---
 name: feature-implementation
 description: Ralph Wiggum TDD loops - loads engineering standards, iterates with quality gates, commits, creates PR.
-allowed-tools: Task, TodoWrite, Bash(git:*), Bash(gh:*), Bash(uv:*), Bash(pytest:*), Bash(ruff:*), Bash(mypy:*), Skill(engineering:engineering-standards), Skill(engineering:python-engineering), Skill(ralph-wiggum:ralph-loop), Read, Write, Edit
+allowed-tools: Task, TodoWrite, Bash(git status:*), Bash(git diff:*), Bash(git restore:*), Bash(uv:*), Bash(pytest:*), Bash(ruff:*), Bash(mypy:*), Skill(engineering:engineering-standards), Skill(engineering:python-engineering), Skill(ralph-loop:ralph-loop), Skill(commit-commands:commit), Skill(commit-commands:commit-push-pr), Read, Write, Edit
 ---
 
 # Feature Implementation
@@ -31,15 +31,29 @@ Skill(engineering:engineering-standards)
 Skill(engineering:python-engineering)
 ```
 
-### 3. Run Ralph Wiggum Loop
+### 3. Run Ralph Loop
+
+The Ralph Loop requires a task description from the plan. Format:
 
 ```text
-Skill(ralph-wiggum:ralph-loop, args="5")
+Skill(ralph-loop:ralph-loop, args="[TASK_DESCRIPTION] --max-iterations 5 --completion-promise 'TASK COMPLETE'")
 ```
 
-**If permission error:** Request user approval, don't skip.
+**Example:**
 
-Ralph Wiggum iterates automatically (max 5):
+```text
+Skill(ralph-loop:ralph-loop, args="Implement user authentication with JWT tokens --max-iterations 5 --completion-promise 'All tests passing'")
+```
+
+**IMPORTANT:** Replace `[TASK_DESCRIPTION]` with your feature implementation plan (from the planner).
+
+**Arguments:**
+
+- `[TASK_DESCRIPTION]` - Required: Clear description of what to implement
+- `--max-iterations N` - Optional: Max iterations (default: unlimited)
+- `--completion-promise 'TEXT'` - Optional: Exit phrase (must use quotes for multi-word)
+
+Ralph Loop iterates automatically:
 
 - Read code
 - Write tests first (TDD)
@@ -48,13 +62,18 @@ Ralph Wiggum iterates automatically (max 5):
 - Fix issues
 - Repeat
 
+**Exit conditions:**
+
+- Max iterations reached
+- Completion promise detected in output
+- Early exit if all checks pass
+
 **Update TodoWrite as tasks complete.**
 
-**Early termination:**
+**Troubleshooting loops:**
 
-- Exit early if tests + quality checks pass
 - If stuck (same errors 2+ times): simplify approach
-- If max iterations: review assumptions, break down task
+- If max iterations reached: review assumptions, consider breaking down task
 
 ### 4. Final QA
 
@@ -68,58 +87,42 @@ uv run pytest && uv run ruff check --fix && uv run ruff format && uv run mypy sr
 - No unrelated changes (git diff)
 - Remove dead code
 
-### 5. Clean Commit
+### 5. Commit, Push, and Create PR
+
+**Before committing, verify changes:**
 
 ```bash
-git status
+git status                        # Review all changes
 git diff                          # Check for unrelated changes
-git restore <unrelated-file>      # Clean up
-git add <relevant-files>
-git commit -m "$(cat <<'EOF'
-<Summary ≤50 chars>
-
-Technical details:
-- Created/modified [files]
-- [Architecture decisions]
-
-Acceptance criteria:
-✓ [Criteria from issue]
-✓ Tests pass ([N] tests)
-✓ Quality checks pass
-
-Closes #<issue-number>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
-EOF
-)"
+git restore <unrelated-file>      # Clean up any unrelated files
 ```
 
-### 6. Push & PR
+**Option A: Commit, push, and PR in one step**
 
-```bash
-git push -u origin <branch-name>
-gh pr create --title "Title" --body "$(cat <<'EOF'
-## Summary
-[What and why]
-
-## Changes
-- Created/modified [files and purpose]
-
-## Testing
-✓ [N] tests passing
-✓ Quality checks passing
-
-## Acceptance Criteria
-✓ [Criteria from issue]
-
-Closes #<issue-number>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-EOF
-)"
+```text
+Skill(commit-commands:commit-push-pr)
 ```
+
+This will:
+
+- Create new branch if on main
+- Stage and commit all changes
+- Push to origin
+- Create pull request
+
+**Option B: Just commit (if you want to review before pushing)**
+
+```text
+Skill(commit-commands:commit)
+```
+
+Then manually push and create PR later.
+
+**The commit command will automatically:**
+
+- Review git status and diff
+- Create appropriate commit message following project conventions
+- Include issue references and acceptance criteria
 
 Complete TodoWrite.
 
@@ -134,6 +137,6 @@ Complete TodoWrite.
 
 | Issue | Fix |
 |-------|-----|
-| Ralph Wiggum permission error | Request user approval |
+| Ralph loop permission error | Ensure task description is provided in args |
 | Max iterations exceeded | Simplify or break into smaller tasks |
 | Unrelated changes | `git restore <file>` |
