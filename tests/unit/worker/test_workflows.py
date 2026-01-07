@@ -11,13 +11,14 @@ from github.Issue import Issue as GithubIssue
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
+from troller.domain.models.issue import Issue
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.github_activities import FetchIssueInput, fetch_issue
 from troller.worker.activities.planning_activities import (
     PlanningInput,
     run_planning_agent,
 )
-from troller.worker.workflows.data_structures import Issue, WorkflowInput
+from troller.worker.workflows.data_structures import IssueResolutionWorkflowInput
 from troller.worker.workflows.issue_resolution import IssueResolutionWorkflow
 
 
@@ -73,7 +74,7 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                     activities=[fetch_issue, run_planning_agent],
                 ):
                     # Execute workflow
-                    input_data = WorkflowInput(
+                    input_data = IssueResolutionWorkflowInput(
                         repo_owner="test-owner",
                         repo_name="test-repo",
                         issue_number=123,
@@ -144,7 +145,7 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                     workflows=[IssueResolutionWorkflow],
                     activities=[fetch_issue, run_planning_agent],
                 ):
-                    input_data = WorkflowInput(
+                    input_data = IssueResolutionWorkflowInput(
                         repo_owner="test-owner",
                         repo_name="test-repo",
                         issue_number=456,
@@ -213,7 +214,7 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
                     workflows=[IssueResolutionWorkflow],
                     activities=[fetch_issue, run_planning_agent],
                 ):
-                    input_data = WorkflowInput(
+                    input_data = IssueResolutionWorkflowInput(
                         repo_owner="test-owner",
                         repo_name="test-repo",
                         issue_number=789,
@@ -283,7 +284,7 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                     activities=[fetch_issue, run_planning_agent],
                 ):
                     # Test with target_branch
-                    input_with_branch = WorkflowInput(
+                    input_with_branch = IssueResolutionWorkflowInput(
                         repo_owner="test-owner",
                         repo_name="test-repo",
                         issue_number=101,
@@ -300,7 +301,7 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                     assert isinstance(result, Plan)
 
                     # Test without target_branch
-                    input_without_branch = WorkflowInput(
+                    input_without_branch = IssueResolutionWorkflowInput(
                         repo_owner="test-owner",
                         repo_name="test-repo",
                         issue_number=102,

@@ -12,7 +12,7 @@ from temporalio.client import Client
 
 from troller.config import config
 from troller.worker.data_converter import pydantic_data_converter
-from troller.worker.workflows.data_structures import WorkflowInput
+from troller.worker.workflows.data_structures import IssueResolutionWorkflowInput
 from troller.worker.workflows.issue_resolution import IssueResolutionWorkflow
 
 
@@ -42,7 +42,7 @@ async def trigger_workflow(
             data_converter=pydantic_data_converter,
         )
 
-        workflow_input = WorkflowInput(
+        workflow_input = IssueResolutionWorkflowInput(
             repo_owner=repo_owner,
             repo_name=repo_name,
             issue_number=issue_number,

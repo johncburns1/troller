@@ -7,8 +7,8 @@ import pytest
 from github.Issue import Issue as GithubIssue
 from github.Label import Label as GithubLabel
 
+from troller.domain.models.issue import Issue
 from troller.worker.activities.github_activities import FetchIssueInput, fetch_issue
-from troller.worker.workflows.data_structures import Issue
 
 
 class TestFetchIssue:

@@ -15,7 +15,7 @@ from temporalio.worker import Worker
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.github_activities import fetch_issue
 from troller.worker.activities.planning_activities import run_planning_agent
-from troller.worker.workflows.data_structures import WorkflowInput
+from troller.worker.workflows.data_structures import IssueResolutionWorkflowInput
 from troller.worker.workflows.issue_resolution import IssueResolutionWorkflow
 
 
@@ -124,7 +124,7 @@ async def test_planning_workflow_end_to_end(
                     activities=[fetch_issue, run_planning_agent],
                 ):
                     # Execute workflow
-                    workflow_input = WorkflowInput(
+                    workflow_input = IssueResolutionWorkflowInput(
                         repo_owner="test-org",
                         repo_name="test-repo",
                         issue_number=42,
@@ -195,7 +195,7 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
                     workflows=[IssueResolutionWorkflow],
                     activities=[fetch_issue, run_planning_agent],
                 ):
-                    workflow_input = WorkflowInput(
+                    workflow_input = IssueResolutionWorkflowInput(
                         repo_owner="test",
                         repo_name="test",
                         issue_number=123,
@@ -266,7 +266,7 @@ async def test_planning_workflow_validates_step_structure() -> None:
                     workflows=[IssueResolutionWorkflow],
                     activities=[fetch_issue, run_planning_agent],
                 ):
-                    workflow_input = WorkflowInput(
+                    workflow_input = IssueResolutionWorkflowInput(
                         repo_owner="test",
                         repo_name="test",
                         issue_number=456,
@@ -337,7 +337,7 @@ async def test_planning_workflow_with_optional_fields() -> None:
                     workflows=[IssueResolutionWorkflow],
                     activities=[fetch_issue, run_planning_agent],
                 ):
-                    workflow_input = WorkflowInput(
+                    workflow_input = IssueResolutionWorkflowInput(
                         repo_owner="test",
                         repo_name="test",
                         issue_number=789,

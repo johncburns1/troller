@@ -7,11 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from temporalio import activity
 
 from troller.config import config
+from troller.domain.models.issue import Issue
 from troller.domain.models.plan import Plan
 from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
 from troller.worker.services.planning_service import PlanningService
-from troller.worker.workflows.data_structures import Issue
 
 
 class PlanningInput(BaseModel):

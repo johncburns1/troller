@@ -9,6 +9,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
+    from troller.domain.models.issue import Issue
     from troller.domain.models.plan import Plan
     from troller.worker.activities.github_activities import (
         FetchIssueInput,
@@ -18,7 +19,7 @@ with workflow.unsafe.imports_passed_through():
         PlanningInput,
         run_planning_agent,
     )
-    from troller.worker.workflows.data_structures import Issue, WorkflowInput
+    from troller.worker.workflows.data_structures import IssueResolutionWorkflowInput
 
 
 @workflow.defn
@@ -35,7 +36,7 @@ class IssueResolutionWorkflow:
         self._plan: Plan | None = None
 
     @workflow.run
-    async def run(self, input: WorkflowInput) -> Plan:
+    async def run(self, input: IssueResolutionWorkflowInput) -> Plan:
         """Execute the issue resolution workflow.
 
         Args:
