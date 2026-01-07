@@ -9,6 +9,7 @@ Development guide for the Troller project - an autonomous GitHub issue resolutio
 **Architecture**: Hexagonal architecture with Temporal workflows coordinating domain logic through activities and adapters.
 
 **Key Documents**:
+
 - [PRODUCT.md](PRODUCT.md) - Product vision and requirements
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System design and technical decisions
 
@@ -35,6 +36,7 @@ uv run pre-commit install  # One-time setup
 - **`engineering:python-engineering`** - Python tooling (uv, ruff, mypy, pytest) and best practices
 
 The skills provide comprehensive guidance on:
+
 - Test-driven development workflow
 - Hexagonal architecture patterns with examples
 - Type annotation requirements (Python 3.13+ syntax)
