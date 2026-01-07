@@ -38,6 +38,7 @@ class Plan:
         technical_approach: Architecture decisions, libraries, and patterns to use.
         testing_strategy: How to test the implementation.
         metadata: Extensible metadata for additional context (issue_number, etc.).
+        based_on_commit: Git commit SHA the plan was based on for change detection.
     """
 
     summary: str
@@ -46,3 +47,4 @@ class Plan:
     technical_approach: str | None = None
     testing_strategy: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    based_on_commit: str | None = None

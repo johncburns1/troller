@@ -18,7 +18,7 @@ class RepoCloner:
 
     async def clone_to_temp(
         self, repo_owner: str, repo_name: str, target_branch: str | None = None
-    ) -> tuple[Path, Path]:
+    ) -> tuple[Path, Path, str]:
         """Clone repository to temporary directory with branch fallback.
 
         Clones a GitHub repository to a temporary directory using shallow clone
@@ -31,9 +31,10 @@ class RepoCloner:
             target_branch: Specific branch to clone. If None, tries main then master.
 
         Returns:
-            Tuple of (temp_dir_path, cloned_repo_path) where temp_dir_path is
-            the root temporary directory and cloned_repo_path is the repository
-            directory inside it.
+            Tuple of (temp_dir_path, cloned_repo_path, commit_sha) where
+            temp_dir_path is the root temporary directory, cloned_repo_path is
+            the repository directory inside it, and commit_sha is the HEAD
+            commit SHA of the cloned repository.
 
         Raises:
             RuntimeError: If git clone fails for all attempted branches.
@@ -66,7 +67,10 @@ class RepoCloner:
                 check=True,
             )
 
-            return temp_dir, clone_path
+            # Extract HEAD commit SHA
+            commit_sha = self._get_head_commit(clone_path)
+
+            return temp_dir, clone_path, commit_sha
 
         except subprocess.CalledProcessError:
             # If main branch doesn't exist and no specific branch was requested, try master
@@ -88,7 +92,10 @@ class RepoCloner:
                         check=True,
                     )
 
-                    return temp_dir, clone_path
+                    # Extract HEAD commit SHA
+                    commit_sha = self._get_head_commit(clone_path)
+
+                    return temp_dir, clone_path, commit_sha
 
                 except subprocess.CalledProcessError as e:
                     # Clean up and raise
@@ -100,6 +107,26 @@ class RepoCloner:
             # Clean up and raise
             shutil.rmtree(temp_dir, ignore_errors=True)
             raise RuntimeError(f"Failed to clone {repo_url} on branch {branch}")
+
+    def _get_head_commit(self, repo_path: Path) -> str:
+        """Extract HEAD commit SHA from cloned repository.
+
+        Args:
+            repo_path: Path to cloned repository.
+
+        Returns:
+            Full 40-character SHA-1 hash of HEAD commit.
+
+        Raises:
+            RuntimeError: If git rev-parse fails.
+        """
+        result = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
 
     def cleanup(self, temp_dir: Path) -> None:
         """Remove temporary directory safely.
