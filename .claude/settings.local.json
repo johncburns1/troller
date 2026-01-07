@@ -13,8 +13,9 @@
       "Bash(git add:*)",
       "Skill(feature-planner)",
       "Skill(feature-implementation)",
-      "Skill(ralph-wiggum:ralph-loop)",
-      "Bash(find:*)"
+      "Skill(ralph-loop:ralph-loop)",
+      "Bash(find:*)",
+      "Bash(git show-ref:*)"
     ]
   }
 }
