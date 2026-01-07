@@ -75,14 +75,14 @@ class PlanningService:
         temp_dir: Path | None = None
 
         try:
-            # Step 1: Clone the repository
-            temp_dir, repo_path = await self._repo_cloner.clone_to_temp(
+            # Step 1: Clone the repository and capture commit SHA
+            temp_dir, repo_path, commit_sha = await self._repo_cloner.clone_to_temp(
                 repo_owner, repo_name, target_branch
             )
 
             # Step 2: Invoke feature-planner skill and parse plan
             plan = await self._generate_plan_with_skill(
-                repo_path, issue_title, issue_body, issue_number
+                repo_path, issue_title, issue_body, issue_number, commit_sha
             )
 
             return plan
@@ -98,6 +98,7 @@ class PlanningService:
         issue_title: str,
         issue_body: str,
         issue_number: int,
+        commit_sha: str,
     ) -> Plan:
         """Generate implementation plan by invoking feature-planner skill.
 
@@ -109,6 +110,7 @@ class PlanningService:
             issue_title: Title of the GitHub issue.
             issue_body: Body/description of the GitHub issue.
             issue_number: Issue number for reference.
+            commit_sha: Git commit SHA the repository is at.
 
         Returns:
             Plan domain object with implementation steps.
@@ -172,16 +174,17 @@ Return a structured plan with:
             raise RuntimeError("Planning agent did not return structured output")
 
         # Convert PlanResponse to Plan domain model
-        return self._convert_to_domain_plan(plan_response, issue_number)
+        return self._convert_to_domain_plan(plan_response, issue_number, commit_sha)
 
     def _convert_to_domain_plan(
-        self, plan_response: PlanResponse, issue_number: int
+        self, plan_response: PlanResponse, issue_number: int, commit_sha: str
     ) -> Plan:
         """Convert validated PlanResponse to Plan domain model.
 
         Args:
             plan_response: Validated Pydantic model from structured output.
             issue_number: GitHub issue number for metadata.
+            commit_sha: Git commit SHA the plan was based on.
 
         Returns:
             Plan domain object with steps converted from PlanStepResponse.
@@ -212,4 +215,5 @@ Return a structured plan with:
             technical_approach=plan_response.technical_approach,
             testing_strategy=plan_response.testing_strategy,
             metadata=metadata,
+            based_on_commit=commit_sha,
         )

@@ -215,3 +215,66 @@ def test_plan_immutability() -> None:
 
     with pytest.raises(AttributeError):
         plan.summary = "Changed"  # type: ignore[misc]
+
+
+def test_plan_creation_with_based_on_commit() -> None:
+    """Create a Plan with based_on_commit field."""
+    created_at = datetime.now(timezone.utc)
+    commit_sha = "abc123def456789012345678901234567890abcd"
+
+    plan = Plan(
+        summary="Implement feature X",
+        steps=[],
+        created_at=created_at,
+        based_on_commit=commit_sha,
+    )
+
+    assert plan.summary == "Implement feature X"
+    assert plan.based_on_commit == commit_sha
+    assert plan.created_at == created_at
+
+
+def test_plan_creation_without_based_on_commit() -> None:
+    """Create a Plan without based_on_commit field (should default to None)."""
+    created_at = datetime.now(timezone.utc)
+
+    plan = Plan(
+        summary="Implement feature Y",
+        steps=[],
+        created_at=created_at,
+    )
+
+    assert plan.summary == "Implement feature Y"
+    assert plan.based_on_commit is None
+
+
+def test_plan_with_all_fields_including_commit() -> None:
+    """Create a Plan with all fields including based_on_commit."""
+    created_at = datetime.now(timezone.utc)
+    commit_sha = "1234567890abcdef1234567890abcdef12345678"
+    steps = [
+        PlanStep(
+            id="step-1",
+            description="Implement component",
+            completed=False,
+            related_files=["src/component.py"],
+            estimated_complexity="moderate",
+        ),
+    ]
+
+    plan = Plan(
+        summary="Add new feature with commit tracking",
+        steps=steps,
+        created_at=created_at,
+        technical_approach="Use hexagonal architecture",
+        testing_strategy="TDD with unit tests",
+        metadata={"issue_number": 27},
+        based_on_commit=commit_sha,
+    )
+
+    assert plan.summary == "Add new feature with commit tracking"
+    assert plan.based_on_commit == commit_sha
+    assert plan.technical_approach == "Use hexagonal architecture"
+    assert plan.testing_strategy == "TDD with unit tests"
+    assert plan.metadata["issue_number"] == 27
+    assert len(plan.steps) == 1

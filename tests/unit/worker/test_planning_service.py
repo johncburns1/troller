@@ -52,7 +52,7 @@ class TestPlanningService:
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -84,7 +84,7 @@ class TestPlanningService:
         temp_dir = MagicMock(spec=Path)
         temp_dir.exists.return_value = True
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(temp_dir, Path("/tmp/test/repo"))
+            return_value=(temp_dir, Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -116,7 +116,7 @@ class TestPlanningService:
         temp_dir = MagicMock(spec=Path)
         temp_dir.exists.return_value = True
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(temp_dir, Path("/tmp/test/repo"))
+            return_value=(temp_dir, Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -149,7 +149,7 @@ class TestPlanningService:
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -183,7 +183,7 @@ class TestPlanningService:
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -218,7 +218,7 @@ class TestPlanningService:
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -250,7 +250,7 @@ class TestPlanningService:
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -296,7 +296,7 @@ class TestPlanningService:
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -331,7 +331,7 @@ class TestPlanningService:
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -362,7 +362,7 @@ class TestPlanningService:
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -398,7 +398,7 @@ class TestPlanningService:
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
-            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"))
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
         )
         mock_cloner.cleanup = MagicMock()
 
@@ -422,3 +422,35 @@ class TestPlanningService:
                 repo_owner="owner",
                 repo_name="repo",
             )
+
+    @pytest.mark.asyncio
+    async def test_generate_plan_captures_and_stores_commit_hash(self) -> None:
+        """generate_plan captures commit hash from RepoCloner and stores in Plan."""
+        commit_sha = "abc123def456789012345678901234567890abcd"
+
+        # Mock RepoCloner to return commit hash
+        mock_cloner = MagicMock(spec=RepoCloner)
+        mock_cloner.clone_to_temp = AsyncMock(
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), commit_sha)
+        )
+        mock_cloner.cleanup = MagicMock()
+
+        # Mock Claude client with structured output
+        mock_client = MagicMock(spec=ClaudeClient)
+
+        async def mock_query_response(*args, **kwargs):
+            yield MockStructuredOutputMessage(create_mock_plan_response())
+
+        mock_client.query = mock_query_response
+
+        service = PlanningService(mock_client, mock_cloner)
+        plan = await service.generate_plan(
+            issue_title="Test feature",
+            issue_body="Implement test",
+            issue_number=27,
+            repo_owner="owner",
+            repo_name="repo",
+        )
+
+        # Verify commit hash is stored in Plan
+        assert plan.based_on_commit == commit_sha
