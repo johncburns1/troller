@@ -4,6 +4,22 @@ Pure business logic with no external dependencies.
 """
 
 from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass(frozen=True)
+class ToolInvocation:
+    """Detailed record of a single tool invocation for auditability.
+
+    Attributes:
+        tool: Name of the tool (Bash, Skill, Read, Grep, Glob, etc.).
+        details: Human-readable description of what the tool did.
+        parameters: Key parameters from the tool invocation for audit trail.
+    """
+
+    tool: str
+    details: str
+    parameters: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -20,6 +36,7 @@ class LLMMetadata:
         model: Claude model used for execution.
         tools_used: List of all tools used during execution (Read, Grep, Skill, etc.).
         execution_flow: Auto-generated brief summary of execution approach.
+        tool_invocations: Detailed audit trail of all tool invocations with parameters.
     """
 
     total_cost_usd: float | None
@@ -31,3 +48,4 @@ class LLMMetadata:
     model: str | None
     tools_used: list[str] = field(default_factory=list)
     execution_flow: str = ""
+    tool_invocations: list[ToolInvocation] = field(default_factory=list)

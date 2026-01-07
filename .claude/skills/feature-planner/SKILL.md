@@ -57,13 +57,7 @@ Skill(engineering:engineering-standards)
 Skill(engineering:python-engineering)  # For Python projects
 ```
 
-### 4. Create Branch & Plan
-
-**Create feature branch:**
-
-```bash
-git checkout -b feature/issue-<number>-<brief-description>
-```
+### 4. Plan
 
 **Create detailed TodoWrite plan:**
 

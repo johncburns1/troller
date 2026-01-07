@@ -7,8 +7,13 @@ Configuration is loaded from multiple sources with the following priority:
 4. Default values defined here (least specific)
 """
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Load environment variables from .env file
+# This ensures variables are available both for Pydantic settings and direct os.environ access
+load_dotenv()
 
 
 class ClaudeModelConfig(BaseSettings):
