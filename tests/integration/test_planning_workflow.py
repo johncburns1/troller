@@ -12,11 +12,19 @@ from github.Issue import Issue as GithubIssue
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
-from troller.worker.activities.github_activities import fetch_issue
+from troller.worker.activities.activity_outputs import LLMMetadataOutput
+from troller.worker.activities.github_activities import (
+    create_feature_branch,
+    create_pull_request,
+    fetch_issue,
+)
+from troller.worker.activities.implementation_activities import run_implementation_agent
 from troller.worker.activities.planning_activities import run_planning_agent
-from troller.worker.workflows.data_structures import IssueResolutionWorkflowInput
+from troller.worker.workflows.data_structures import (
+    IssueResolutionWorkflowInput,
+    IssueResolutionWorkflowOutput,
+)
 from troller.worker.workflows.issue_resolution import IssueResolutionWorkflow
 
 
@@ -44,13 +52,13 @@ We need to add user authentication to the application.
 
 
 @pytest.fixture
-def expected_llm_metadata() -> LLMMetadata:
+def expected_llm_metadata() -> LLMMetadataOutput:
     """Create expected LLM metadata for testing.
 
     Returns:
-        LLMMetadata with realistic execution information.
+        LLMMetadataOutput with realistic execution information.
     """
-    return LLMMetadata(
+    return LLMMetadataOutput(
         total_cost_usd=0.15,
         input_tokens=1000,
         output_tokens=500,
@@ -111,9 +119,9 @@ def expected_plan() -> Plan:
 async def test_planning_workflow_end_to_end(
     mock_github_issue: MagicMock,
     expected_plan: Plan,
-    expected_llm_metadata: LLMMetadata,
+    expected_llm_metadata: LLMMetadataOutput,
 ) -> None:
-    """Workflow executes end-to-end: fetch_issue → run_planning_agent → returns Plan.
+    """Workflow executes end-to-end: fetch_issue → branch → PR (draft) → plan → implement.
 
     This integration test validates the full workflow orchestration.
     """
@@ -127,6 +135,15 @@ async def test_planning_workflow_end_to_end(
             patch(
                 "troller.worker.activities.planning_activities.PlanningService"
             ) as mock_planning_service_class,
+            patch(
+                "troller.worker.activities.github_activities.RepoCloner"
+            ) as mock_cloner_class,
+            patch(
+                "troller.worker.activities.github_activities.GitOperations"
+            ) as mock_git_ops_class,
+            patch(
+                "troller.worker.activities.implementation_activities.ImplementationService"
+            ) as mock_impl_service_class,
         ):
             # Setup GitHub client mock
             mock_gh_client = MagicMock()
@@ -140,13 +157,61 @@ async def test_planning_workflow_end_to_end(
                 return_value=(expected_plan, expected_llm_metadata)
             )
 
+            # Setup git and implementation mocks
+            from pathlib import Path
+
+            from troller.domain.models.pull_request import PullRequest
+            from troller.worker.activities.activity_outputs import CommitOutput
+
+            mock_cloner = MagicMock()
+            mock_cloner_class.return_value = mock_cloner
+            mock_git_ops = MagicMock()
+            mock_git_ops_class.return_value = mock_git_ops
+            mock_cloner.clone_to_temp = AsyncMock(
+                return_value=(Path("/tmp/t"), Path("/tmp/t/r"), "sha")
+            )
+            mock_git_ops.create_branch = AsyncMock()
+            mock_git_ops.push_branch = AsyncMock()
+            mock_git_ops.get_current_sha = AsyncMock(return_value="branch-sha")
+
+            mock_impl_service = MagicMock()
+            mock_impl_service_class.return_value = mock_impl_service
+            commits = [
+                CommitOutput(
+                    sha="commit-1",
+                    message="Commit",
+                    timestamp=datetime.now(),
+                    internal_review_feedback=None,
+                )
+            ]
+            mock_impl_service.implement_changes = AsyncMock(
+                return_value=(commits, expected_llm_metadata)
+            )
+
+            pr = PullRequest(
+                number=1,
+                url="https://github.com/test-org/test-repo/pull/1",
+                head_branch="troller/issue-42",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="open",
+            )
+            mock_gh_client.create_pull_request.return_value = pr
+
             # Create workflow environment
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
                     env.client,
                     task_queue="test-task-queue",
                     workflows=[IssueResolutionWorkflow],
-                    activities=[fetch_issue, run_planning_agent],
+                    activities=[
+                        fetch_issue,
+                        run_planning_agent,
+                        create_feature_branch,
+                        run_implementation_agent,
+                        create_pull_request,
+                    ],
                 ):
                     # Execute workflow
                     workflow_input = IssueResolutionWorkflowInput(
@@ -161,10 +226,10 @@ async def test_planning_workflow_end_to_end(
                         task_queue="test-task-queue",
                     )
 
-                    # Verify workflow returned the plan
-                    assert result is not None
-                    assert result.summary == expected_plan.summary
-                    assert len(result.steps) == len(expected_plan.steps)
+                    # Verify workflow returned the workflow output
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.plan.summary == expected_plan.summary
+                    assert len(result.plan.steps) == len(expected_plan.steps)
 
 
 @pytest.mark.asyncio
@@ -185,6 +250,15 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
             patch(
                 "troller.worker.activities.planning_activities.PlanningService"
             ) as mock_planning_service_class,
+            patch(
+                "troller.worker.activities.github_activities.RepoCloner"
+            ) as mock_cloner_class,
+            patch(
+                "troller.worker.activities.github_activities.GitOperations"
+            ) as mock_git_ops_class,
+            patch(
+                "troller.worker.activities.implementation_activities.ImplementationService"
+            ) as mock_impl_service_class,
         ):
             # Setup mocks
             mock_gh_client = MagicMock()
@@ -209,7 +283,7 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
             )
 
             # Create test LLM metadata
-            test_llm_metadata = LLMMetadata(
+            test_llm_metadata = LLMMetadataOutput(
                 total_cost_usd=0.10,
                 input_tokens=800,
                 output_tokens=400,
@@ -227,13 +301,61 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
                 return_value=(test_plan, test_llm_metadata)
             )
 
+            # Setup git and implementation mocks
+            from pathlib import Path
+
+            from troller.domain.models.pull_request import PullRequest
+            from troller.worker.activities.activity_outputs import CommitOutput
+
+            mock_cloner = MagicMock()
+            mock_cloner_class.return_value = mock_cloner
+            mock_git_ops = MagicMock()
+            mock_git_ops_class.return_value = mock_git_ops
+            mock_cloner.clone_to_temp = AsyncMock(
+                return_value=(Path("/tmp/t"), Path("/tmp/t/r"), "sha")
+            )
+            mock_git_ops.create_branch = AsyncMock()
+            mock_git_ops.push_branch = AsyncMock()
+            mock_git_ops.get_current_sha = AsyncMock(return_value="branch-sha")
+
+            mock_impl_service = MagicMock()
+            mock_impl_service_class.return_value = mock_impl_service
+            commits = [
+                CommitOutput(
+                    sha="commit-1",
+                    message="Commit",
+                    timestamp=datetime.now(),
+                    internal_review_feedback=None,
+                )
+            ]
+            mock_impl_service.implement_changes = AsyncMock(
+                return_value=(commits, test_llm_metadata)
+            )
+
+            pr = PullRequest(
+                number=1,
+                url="https://github.com/test/test/pull/1",
+                head_branch="troller/issue-123",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="open",
+            )
+            mock_gh_client.create_pull_request.return_value = pr
+
             # Create workflow environment and execute
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
                     env.client,
                     task_queue="test-task-queue",
                     workflows=[IssueResolutionWorkflow],
-                    activities=[fetch_issue, run_planning_agent],
+                    activities=[
+                        fetch_issue,
+                        run_planning_agent,
+                        create_feature_branch,
+                        run_implementation_agent,
+                        create_pull_request,
+                    ],
                 ):
                     workflow_input = IssueResolutionWorkflowInput(
                         repo_owner="test",
@@ -248,8 +370,9 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
                     )
 
                     # Verify metadata
-                    assert "issue_number" in result.metadata
-                    assert result.metadata["issue_number"] == 123
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert "issue_number" in result.plan.metadata
+                    assert result.plan.metadata["issue_number"] == 123
 
 
 @pytest.mark.asyncio
@@ -270,6 +393,15 @@ async def test_planning_workflow_validates_step_structure() -> None:
             patch(
                 "troller.worker.activities.planning_activities.PlanningService"
             ) as mock_planning_service_class,
+            patch(
+                "troller.worker.activities.github_activities.RepoCloner"
+            ) as mock_cloner_class,
+            patch(
+                "troller.worker.activities.github_activities.GitOperations"
+            ) as mock_git_ops_class,
+            patch(
+                "troller.worker.activities.implementation_activities.ImplementationService"
+            ) as mock_impl_service_class,
         ):
             # Setup mocks
             mock_gh_client = MagicMock()
@@ -295,7 +427,7 @@ async def test_planning_workflow_validates_step_structure() -> None:
             )
 
             # Create test LLM metadata
-            test_llm_metadata = LLMMetadata(
+            test_llm_metadata = LLMMetadataOutput(
                 total_cost_usd=0.12,
                 input_tokens=900,
                 output_tokens=450,
@@ -313,13 +445,61 @@ async def test_planning_workflow_validates_step_structure() -> None:
                 return_value=(test_plan, test_llm_metadata)
             )
 
+            # Setup git and implementation mocks
+            from pathlib import Path
+
+            from troller.domain.models.pull_request import PullRequest
+            from troller.worker.activities.activity_outputs import CommitOutput
+
+            mock_cloner = MagicMock()
+            mock_cloner_class.return_value = mock_cloner
+            mock_git_ops = MagicMock()
+            mock_git_ops_class.return_value = mock_git_ops
+            mock_cloner.clone_to_temp = AsyncMock(
+                return_value=(Path("/tmp/t"), Path("/tmp/t/r"), "sha")
+            )
+            mock_git_ops.create_branch = AsyncMock()
+            mock_git_ops.push_branch = AsyncMock()
+            mock_git_ops.get_current_sha = AsyncMock(return_value="branch-sha")
+
+            mock_impl_service = MagicMock()
+            mock_impl_service_class.return_value = mock_impl_service
+            commits = [
+                CommitOutput(
+                    sha="commit-1",
+                    message="Commit",
+                    timestamp=datetime.now(),
+                    internal_review_feedback=None,
+                )
+            ]
+            mock_impl_service.implement_changes = AsyncMock(
+                return_value=(commits, test_llm_metadata)
+            )
+
+            pr = PullRequest(
+                number=1,
+                url="https://github.com/test/test/pull/1",
+                head_branch="troller/issue-456",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="open",
+            )
+            mock_gh_client.create_pull_request.return_value = pr
+
             # Execute workflow
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
                     env.client,
                     task_queue="test-task-queue",
                     workflows=[IssueResolutionWorkflow],
-                    activities=[fetch_issue, run_planning_agent],
+                    activities=[
+                        fetch_issue,
+                        run_planning_agent,
+                        create_feature_branch,
+                        run_implementation_agent,
+                        create_pull_request,
+                    ],
                 ):
                     workflow_input = IssueResolutionWorkflowInput(
                         repo_owner="test",
@@ -334,8 +514,9 @@ async def test_planning_workflow_validates_step_structure() -> None:
                     )
 
                     # Validate step structure
-                    assert len(result.steps) == 3
-                    for step in result.steps:
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert len(result.plan.steps) == 3
+                    for step in result.plan.steps:
                         # Required fields
                         assert isinstance(step.id, str)
                         assert isinstance(step.description, str)
@@ -355,6 +536,15 @@ async def test_planning_workflow_with_optional_fields() -> None:
             patch(
                 "troller.worker.activities.planning_activities.PlanningService"
             ) as mock_planning_service_class,
+            patch(
+                "troller.worker.activities.github_activities.RepoCloner"
+            ) as mock_cloner_class,
+            patch(
+                "troller.worker.activities.github_activities.GitOperations"
+            ) as mock_git_ops_class,
+            patch(
+                "troller.worker.activities.implementation_activities.ImplementationService"
+            ) as mock_impl_service_class,
         ):
             # Setup mocks
             mock_gh_client = MagicMock()
@@ -381,7 +571,7 @@ async def test_planning_workflow_with_optional_fields() -> None:
             )
 
             # Create test LLM metadata
-            test_llm_metadata = LLMMetadata(
+            test_llm_metadata = LLMMetadataOutput(
                 total_cost_usd=0.20,
                 input_tokens=1200,
                 output_tokens=600,
@@ -399,13 +589,61 @@ async def test_planning_workflow_with_optional_fields() -> None:
                 return_value=(test_plan, test_llm_metadata)
             )
 
+            # Setup git and implementation mocks
+            from pathlib import Path
+
+            from troller.domain.models.pull_request import PullRequest
+            from troller.worker.activities.activity_outputs import CommitOutput
+
+            mock_cloner = MagicMock()
+            mock_cloner_class.return_value = mock_cloner
+            mock_git_ops = MagicMock()
+            mock_git_ops_class.return_value = mock_git_ops
+            mock_cloner.clone_to_temp = AsyncMock(
+                return_value=(Path("/tmp/t"), Path("/tmp/t/r"), "sha")
+            )
+            mock_git_ops.create_branch = AsyncMock()
+            mock_git_ops.push_branch = AsyncMock()
+            mock_git_ops.get_current_sha = AsyncMock(return_value="branch-sha")
+
+            mock_impl_service = MagicMock()
+            mock_impl_service_class.return_value = mock_impl_service
+            commits = [
+                CommitOutput(
+                    sha="commit-1",
+                    message="Commit",
+                    timestamp=datetime.now(),
+                    internal_review_feedback=None,
+                )
+            ]
+            mock_impl_service.implement_changes = AsyncMock(
+                return_value=(commits, test_llm_metadata)
+            )
+
+            pr = PullRequest(
+                number=1,
+                url="https://github.com/test/test/pull/1",
+                head_branch="troller/issue-789",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="open",
+            )
+            mock_gh_client.create_pull_request.return_value = pr
+
             # Execute workflow
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
                     env.client,
                     task_queue="test-task-queue",
                     workflows=[IssueResolutionWorkflow],
-                    activities=[fetch_issue, run_planning_agent],
+                    activities=[
+                        fetch_issue,
+                        run_planning_agent,
+                        create_feature_branch,
+                        run_implementation_agent,
+                        create_pull_request,
+                    ],
                 ):
                     workflow_input = IssueResolutionWorkflowInput(
                         repo_owner="test",
@@ -420,6 +658,7 @@ async def test_planning_workflow_with_optional_fields() -> None:
                     )
 
                     # Verify metadata preserved
-                    assert result.metadata["issue_number"] == 789
-                    assert "skill_output" in result.metadata
-                    assert "custom_data" in result.metadata
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.plan.metadata["issue_number"] == 789
+                    assert "skill_output" in result.plan.metadata
+                    assert "custom_data" in result.plan.metadata

@@ -21,7 +21,8 @@
       "Bash(gh milestone:*)",
       "Bash(gh issue create:*)",
       "Bash(gh issue edit:*)",
-      "Bash(uv sync:*)"
+      "Bash(uv sync:*)",
+      "Bash(mkdir:*)"
     ]
   }
 }

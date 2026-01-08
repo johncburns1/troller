@@ -8,6 +8,8 @@ import os
 from github import Auth, Github
 from github.Issue import Issue as GithubIssue
 
+from troller.domain.models.pull_request import PullRequest
+
 
 class GitHubClient:
     """GitHub API client for fetching issues and repository information.
@@ -42,3 +44,52 @@ class GitHubClient:
         """
         repository = self._client.get_repo(f"{owner}/{repo}")
         return repository.get_issue(issue_number)
+
+    def create_pull_request(
+        self,
+        owner: str,
+        repo: str,
+        title: str,
+        body: str,
+        head_branch: str,
+        base_branch: str,
+        draft: bool = False,
+    ) -> PullRequest:
+        """Create a pull request on GitHub.
+
+        Args:
+            owner: Repository owner (user or organization).
+            repo: Repository name.
+            title: Pull request title.
+            body: Pull request description/body.
+            head_branch: Branch containing the changes.
+            base_branch: Branch to merge changes into (e.g., 'main').
+            draft: Whether to create as draft PR (default: False).
+
+        Returns:
+            Domain PullRequest model with PR details.
+        """
+        repository = self._client.get_repo(f"{owner}/{repo}")
+        github_pr = repository.create_pull(
+            title=title,
+            body=body,
+            head=head_branch,
+            base=base_branch,
+            draft=draft,
+        )
+
+        # Convert PyGithub PullRequest to domain model
+        # PyGithub state is a string, cast to our Literal type
+        state = github_pr.state
+        if state not in ("open", "merged", "closed"):
+            state = "open"  # Default to open if unexpected state
+
+        return PullRequest(
+            number=github_pr.number,
+            url=github_pr.html_url,
+            head_branch=github_pr.head.ref,
+            base_branch=github_pr.base.ref,
+            head_sha=github_pr.head.sha,
+            created_at=github_pr.created_at,
+            state=state,  # type: ignore[arg-type]
+        )
