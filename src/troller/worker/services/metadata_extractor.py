@@ -6,7 +6,10 @@ Separated for testability and single responsibility.
 
 from typing import Any
 
-from troller.domain.models.llm_metadata import LLMMetadata, ToolInvocation
+from troller.worker.activities.activity_outputs import (
+    LLMMetadataOutput,
+    ToolInvocationOutput,
+)
 
 
 class MetadataExtractor:
@@ -16,7 +19,9 @@ class MetadataExtractor:
     making it easy to test in isolation.
     """
 
-    def extract_metadata(self, messages: list[Any], result_message: Any) -> LLMMetadata:
+    def extract_metadata(
+        self, messages: list[Any], result_message: Any
+    ) -> LLMMetadataOutput:
         """Extract LLM metadata from SDK messages and result.
 
         Args:
@@ -24,7 +29,7 @@ class MetadataExtractor:
             result_message: The final ResultMessage with cost and usage info.
 
         Returns:
-            LLMMetadata object with extracted information.
+            LLMMetadataOutput object with extracted information.
         """
         # Extract from ResultMessage
         total_cost = None
@@ -62,7 +67,7 @@ class MetadataExtractor:
         # Extract detailed tool invocations for audit trail
         tool_invocations = self.extract_tool_invocations(messages)
 
-        return LLMMetadata(
+        return LLMMetadataOutput(
             total_cost_usd=total_cost,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -146,16 +151,18 @@ class MetadataExtractor:
         # Truncate to 200 characters
         return summary[:200]
 
-    def extract_tool_invocations(self, messages: list[Any]) -> list[ToolInvocation]:
+    def extract_tool_invocations(
+        self, messages: list[Any]
+    ) -> list[ToolInvocationOutput]:
         """Extract detailed audit trail of all tool invocations.
 
         Args:
             messages: List of SDK messages from the query execution.
 
         Returns:
-            List of ToolInvocation objects with detailed parameters.
+            List of ToolInvocationOutput objects with detailed parameters.
         """
-        invocations: list[ToolInvocation] = []
+        invocations: list[ToolInvocationOutput] = []
 
         for message in messages:
             # Check if this is an AssistantMessage with content blocks
@@ -229,7 +236,7 @@ class MetadataExtractor:
                             )
 
                         invocations.append(
-                            ToolInvocation(
+                            ToolInvocationOutput(
                                 tool=tool_name, details=details, parameters=parameters
                             )
                         )

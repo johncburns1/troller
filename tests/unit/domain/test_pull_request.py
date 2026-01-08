@@ -13,6 +13,8 @@ def test_pull_request_creation_with_all_fields() -> None:
     pr = PullRequest(
         number=42,
         url="https://github.com/owner/repo/pull/42",
+        head_branch="feature/test",
+        base_branch="main",
         head_sha="abc123def456",
         created_at=created_at,
         state="open",
@@ -31,6 +33,8 @@ def test_pull_request_with_state_merged() -> None:
     pr = PullRequest(
         number=100,
         url="https://github.com/owner/repo/pull/100",
+        head_branch="feature/complete",
+        base_branch="main",
         head_sha="1234567890abcdef1234567890abcdef12345678",
         created_at=created_at,
         state="merged",
@@ -47,6 +51,8 @@ def test_pull_request_with_state_closed() -> None:
     pr = PullRequest(
         number=55,
         url="https://github.com/owner/repo/pull/55",
+        head_branch="feature/old",
+        base_branch="main",
         head_sha="def456",
         created_at=created_at,
         state="closed",
@@ -62,6 +68,8 @@ def test_pull_request_immutability() -> None:
     pr = PullRequest(
         number=1,
         url="https://github.com/owner/repo/pull/1",
+        head_branch="feature/test",
+        base_branch="main",
         head_sha="abc123",
         created_at=created_at,
         state="open",
@@ -78,6 +86,8 @@ def test_pull_request_with_different_pr_numbers() -> None:
     pr1 = PullRequest(
         number=1,
         url="https://github.com/owner/repo/pull/1",
+        head_branch="feature/first",
+        base_branch="main",
         head_sha="sha1",
         created_at=created_at,
         state="open",
@@ -86,6 +96,8 @@ def test_pull_request_with_different_pr_numbers() -> None:
     pr2 = PullRequest(
         number=9999,
         url="https://github.com/owner/repo/pull/9999",
+        head_branch="feature/large-number",
+        base_branch="main",
         head_sha="sha2",
         created_at=created_at,
         state="merged",
@@ -105,6 +117,8 @@ def test_pull_request_url_formats() -> None:
     pr1 = PullRequest(
         number=42,
         url="https://github.com/owner/repo/pull/42",
+        head_branch="feature/standard",
+        base_branch="main",
         head_sha="abc123",
         created_at=created_at,
         state="open",
@@ -114,6 +128,8 @@ def test_pull_request_url_formats() -> None:
     pr2 = PullRequest(
         number=10,
         url="https://github.enterprise.com/owner/repo/pull/10",
+        head_branch="feature/enterprise",
+        base_branch="main",
         head_sha="def456",
         created_at=created_at,
         state="open",
@@ -133,6 +149,8 @@ def test_pull_request_with_short_and_full_sha() -> None:
     pr_short = PullRequest(
         number=1,
         url="https://github.com/owner/repo/pull/1",
+        head_branch="feature/short",
+        base_branch="main",
         head_sha="abc123",
         created_at=created_at,
         state="open",
@@ -142,6 +160,8 @@ def test_pull_request_with_short_and_full_sha() -> None:
     pr_full = PullRequest(
         number=2,
         url="https://github.com/owner/repo/pull/2",
+        head_branch="feature/full",
+        base_branch="main",
         head_sha="1234567890abcdef1234567890abcdef12345678",
         created_at=created_at,
         state="open",

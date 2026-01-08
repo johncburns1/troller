@@ -7,9 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from troller.config import ClaudeModelConfig
-from troller.domain.models.issue import Issue
-from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
+from troller.worker.activities.activity_outputs import LLMMetadataOutput
 from troller.worker.activities.planning_activities import (
     PlanningActivityOutput,
     PlanningInput,
@@ -22,7 +21,7 @@ class TestRunPlanningAgent:
 
     @pytest.mark.asyncio
     async def test_run_planning_agent_returns_plan_object(self) -> None:
-        """run_planning_agent returns Plan domain object."""
+        """run_planning_agent returns PlanDTO."""
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
             with patch(
                 "troller.worker.activities.planning_activities.PlanningService"
@@ -31,7 +30,7 @@ class TestRunPlanningAgent:
                 mock_service = MagicMock()
                 mock_service_class.return_value = mock_service
 
-                # Mock plan and metadata
+                # Mock plan and metadata (domain models from service)
                 expected_plan = Plan(
                     summary="Test implementation plan",
                     steps=[
@@ -44,7 +43,7 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={"issue_number": 42},
                 )
-                expected_metadata = LLMMetadata(
+                expected_metadata = LLMMetadataOutput(
                     total_cost_usd=0.10,
                     input_tokens=800,
                     output_tokens=400,
@@ -59,25 +58,24 @@ class TestRunPlanningAgent:
                     return_value=(expected_plan, expected_metadata)
                 )
 
-                # Test
-                issue = Issue(
-                    number=42,
-                    title="Add new feature",
-                    description="Feature description",
-                    labels=["enhancement"],
-                    url="https://github.com/owner/repo/issues/42",
-                )
+                # Test with DTO input
                 planning_input = PlanningInput(
-                    issue=issue,
+                    issue_number=42,
+                    issue_title="Add new feature",
+                    issue_description="Feature description",
+                    issue_labels=["enhancement"],
+                    issue_url="https://github.com/owner/repo/issues/42",
                     repo_owner="owner",
                     repo_name="repo",
                 )
                 result = await run_planning_agent(planning_input)
 
-                # Verify
+                # Verify activity returns DTOs
                 assert isinstance(result, PlanningActivityOutput)
-                assert result.plan == expected_plan
-                assert result.llm_metadata == expected_metadata
+                assert result.plan.summary == expected_plan.summary
+                assert len(result.plan.steps) == 1
+                assert result.plan.steps[0].id == "step-1"
+                assert result.llm_metadata.total_cost_usd == 0.10
 
     @pytest.mark.asyncio
     async def test_run_planning_agent_calls_service_with_issue_details(self) -> None:
@@ -96,7 +94,7 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={},
                 )
-                mock_metadata = LLMMetadata(
+                mock_metadata = LLMMetadataOutput(
                     total_cost_usd=0.05,
                     input_tokens=500,
                     output_tokens=250,
@@ -111,16 +109,13 @@ class TestRunPlanningAgent:
                     return_value=(mock_plan, mock_metadata)
                 )
 
-                # Test
-                issue = Issue(
-                    number=123,
-                    title="Fix authentication bug",
-                    description="Users cannot log in with OAuth",
-                    labels=["bug", "priority:high"],
-                    url="https://github.com/test/test/issues/123",
-                )
+                # Test with DTO input
                 planning_input = PlanningInput(
-                    issue=issue,
+                    issue_number=123,
+                    issue_title="Fix authentication bug",
+                    issue_description="Users cannot log in with OAuth",
+                    issue_labels=["bug", "priority:high"],
+                    issue_url="https://github.com/test/test/issues/123",
                     repo_owner="testowner",
                     repo_name="testrepo",
                     target_branch="develop",
@@ -154,7 +149,7 @@ class TestRunPlanningAgent:
                     created_at=datetime.now(),
                     metadata={},
                 )
-                mock_metadata = LLMMetadata(
+                mock_metadata = LLMMetadataOutput(
                     total_cost_usd=0.03,
                     input_tokens=300,
                     output_tokens=150,
@@ -170,15 +165,12 @@ class TestRunPlanningAgent:
                 )
 
                 # Test
-                issue = Issue(
-                    number=1,
-                    title="Issue with no description",
-                    description="",
-                    labels=[],
-                    url="https://github.com/owner/repo/issues/1",
-                )
                 planning_input = PlanningInput(
-                    issue=issue,
+                    issue_number=1,
+                    issue_title="Issue with no description",
+                    issue_description="",
+                    issue_labels=[],
+                    issue_url="https://github.com/owner/repo/issues/1",
                     repo_owner="owner",
                     repo_name="repo",
                 )
@@ -229,7 +221,7 @@ class TestRunPlanningAgent:
                     created_at=datetime(2025, 1, 1, 12, 0, 0),
                     metadata={"issue_number": 999, "custom_field": "value"},
                 )
-                expected_metadata = LLMMetadata(
+                expected_metadata = LLMMetadataOutput(
                     total_cost_usd=0.25,
                     input_tokens=1500,
                     output_tokens=750,
@@ -245,15 +237,12 @@ class TestRunPlanningAgent:
                 )
 
                 # Test
-                issue = Issue(
-                    number=999,
-                    title="Major refactoring",
-                    description="Refactor authentication system",
-                    labels=["refactoring"],
-                    url="https://github.com/owner/repo/issues/999",
-                )
                 planning_input = PlanningInput(
-                    issue=issue,
+                    issue_number=999,
+                    issue_title="Major refactoring",
+                    issue_description="Refactor authentication system",
+                    issue_labels=["refactoring"],
+                    issue_url="https://github.com/owner/repo/issues/999",
                     repo_owner="owner",
                     repo_name="repo",
                 )
@@ -303,7 +292,7 @@ class TestRunPlanningAgent:
                             created_at=datetime.now(),
                             metadata={},
                         )
-                        mock_metadata = LLMMetadata(
+                        mock_metadata = LLMMetadataOutput(
                             total_cost_usd=0.01,
                             input_tokens=100,
                             output_tokens=50,
@@ -319,15 +308,14 @@ class TestRunPlanningAgent:
                         )
 
                         # Test
-                        issue = Issue(
-                            number=1,
-                            title="Test",
-                            description="Test",
-                            labels=[],
-                            url="https://github.com/test/test/issues/1",
-                        )
                         planning_input = PlanningInput(
-                            issue=issue, repo_owner="test", repo_name="test"
+                            issue_number=1,
+                            issue_title="Test",
+                            issue_description="Test",
+                            issue_labels=[],
+                            issue_url="https://github.com/test/test/issues/1",
+                            repo_owner="test",
+                            repo_name="test",
                         )
                         await run_planning_agent(planning_input)
 
@@ -373,7 +361,7 @@ class TestRunPlanningAgent:
                             created_at=datetime.now(),
                             metadata={},
                         )
-                        mock_metadata = LLMMetadata(
+                        mock_metadata = LLMMetadataOutput(
                             total_cost_usd=0.01,
                             input_tokens=100,
                             output_tokens=50,
@@ -389,15 +377,14 @@ class TestRunPlanningAgent:
                         )
 
                         # Test
-                        issue = Issue(
-                            number=1,
-                            title="Test",
-                            description="Test",
-                            labels=[],
-                            url="https://github.com/test/test/issues/1",
-                        )
                         planning_input = PlanningInput(
-                            issue=issue, repo_owner="test", repo_name="test"
+                            issue_number=1,
+                            issue_title="Test",
+                            issue_description="Test",
+                            issue_labels=[],
+                            issue_url="https://github.com/test/test/issues/1",
+                            repo_owner="test",
+                            repo_name="test",
                         )
                         await run_planning_agent(planning_input)
 

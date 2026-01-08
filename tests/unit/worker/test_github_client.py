@@ -1,12 +1,14 @@
 """Unit tests for GitHub API client adapter."""
 
 import os
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
 from github import Auth
 from github.Issue import Issue as GithubIssue
 
+from troller.domain.models.pull_request import PullRequest
 from troller.worker.adapters.github_client import GitHubClient
 
 
@@ -86,3 +88,130 @@ class TestGitHubClient:
                 assert isinstance(
                     issue, MagicMock
                 )  # In real usage, would be GithubIssue
+
+    def test_create_pull_request_creates_pr_and_returns_domain_model(
+        self,
+    ) -> None:
+        """create_pull_request creates PR on GitHub and returns domain PullRequest."""
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with patch(
+                "troller.worker.adapters.github_client.Github"
+            ) as mock_github_class:
+                # Setup mocks
+                mock_github = MagicMock()
+                mock_github_class.return_value = mock_github
+
+                mock_repo = MagicMock()
+                mock_github.get_repo.return_value = mock_repo
+
+                # Mock the created pull request
+                mock_pr = MagicMock()
+                mock_pr.number = 42
+                mock_pr.html_url = "https://github.com/owner/repo/pull/42"
+                mock_pr.head.sha = "abc123def456"
+                mock_pr.created_at = datetime(2024, 1, 1, 12, 0, 0)
+                mock_pr.state = "open"
+                mock_repo.create_pull.return_value = mock_pr
+
+                # Test
+                client = GitHubClient()
+                result = client.create_pull_request(
+                    owner="owner",
+                    repo="repo",
+                    title="Test PR",
+                    body="Test description",
+                    head_branch="feature/test",
+                    base_branch="main",
+                    draft=False,
+                )
+
+                # Verify create_pull was called correctly
+                mock_repo.create_pull.assert_called_once_with(
+                    title="Test PR",
+                    body="Test description",
+                    head="feature/test",
+                    base="main",
+                    draft=False,
+                )
+
+                # Verify domain model returned
+                assert isinstance(result, PullRequest)
+                assert result.number == 42
+                assert result.url == "https://github.com/owner/repo/pull/42"
+                assert result.head_sha == "abc123def456"
+                assert result.created_at == datetime(2024, 1, 1, 12, 0, 0)
+                assert result.state == "open"
+
+    def test_create_pull_request_creates_draft_pr_when_draft_is_true(
+        self,
+    ) -> None:
+        """create_pull_request creates draft PR when draft parameter is True."""
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with patch(
+                "troller.worker.adapters.github_client.Github"
+            ) as mock_github_class:
+                # Setup mocks
+                mock_github = MagicMock()
+                mock_github_class.return_value = mock_github
+
+                mock_repo = MagicMock()
+                mock_github.get_repo.return_value = mock_repo
+
+                mock_pr = MagicMock()
+                mock_pr.number = 1
+                mock_pr.html_url = "https://github.com/owner/repo/pull/1"
+                mock_pr.head.sha = "def456"
+                mock_pr.created_at = datetime(2024, 1, 1, 12, 0, 0)
+                mock_pr.state = "open"
+                mock_repo.create_pull.return_value = mock_pr
+
+                # Test
+                client = GitHubClient()
+                client.create_pull_request(
+                    owner="owner",
+                    repo="repo",
+                    title="Draft PR",
+                    body="Work in progress",
+                    head_branch="feature/draft",
+                    base_branch="main",
+                    draft=True,
+                )
+
+                # Verify draft=True was passed
+                call_kwargs = mock_repo.create_pull.call_args.kwargs
+                assert call_kwargs["draft"] is True
+
+    def test_create_pull_request_uses_correct_repo_path(self) -> None:
+        """create_pull_request gets repository using owner/repo format."""
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with patch(
+                "troller.worker.adapters.github_client.Github"
+            ) as mock_github_class:
+                # Setup mocks
+                mock_github = MagicMock()
+                mock_github_class.return_value = mock_github
+
+                mock_repo = MagicMock()
+                mock_github.get_repo.return_value = mock_repo
+
+                mock_pr = MagicMock()
+                mock_pr.number = 1
+                mock_pr.html_url = "https://github.com/test-owner/test-repo/pull/1"
+                mock_pr.head.sha = "abc123"
+                mock_pr.created_at = datetime(2024, 1, 1, 12, 0, 0)
+                mock_pr.state = "open"
+                mock_repo.create_pull.return_value = mock_pr
+
+                # Test
+                client = GitHubClient()
+                client.create_pull_request(
+                    owner="test-owner",
+                    repo="test-repo",
+                    title="Test",
+                    body="Body",
+                    head_branch="feature/test",
+                    base_branch="main",
+                )
+
+                # Verify correct repo path
+                mock_github.get_repo.assert_called_once_with("test-owner/test-repo")

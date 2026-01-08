@@ -13,8 +13,8 @@ from typing import Any
 
 from claude_agent_sdk import ClaudeAgentOptions
 
-from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
+from troller.worker.activities.activity_outputs import LLMMetadataOutput
 from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
 from troller.worker.services.metadata_extractor import MetadataExtractor
@@ -59,7 +59,7 @@ class PlanningService:
         repo_owner: str,
         repo_name: str,
         target_branch: str | None = None,
-    ) -> tuple[Plan, LLMMetadata]:
+    ) -> tuple[Plan, LLMMetadataOutput]:
         """Generate a codebase-aware implementation plan from a GitHub issue.
 
         This method atomically:
@@ -109,7 +109,7 @@ class PlanningService:
         issue_body: str,
         issue_number: int,
         commit_sha: str,
-    ) -> tuple[Plan, LLMMetadata]:
+    ) -> tuple[Plan, LLMMetadataOutput]:
         """Generate implementation plan by invoking feature-planner skill.
 
         This method uses Claude Agent SDK structured outputs to get a
@@ -246,7 +246,7 @@ Return a structured plan with:
 
     def _extract_llm_metadata(
         self, messages: list[Any], result_message: Any
-    ) -> LLMMetadata:
+    ) -> LLMMetadataOutput:
         """Extract LLM metadata from SDK messages and result.
 
         Args:
@@ -254,6 +254,6 @@ Return a structured plan with:
             result_message: The final ResultMessage with cost and usage info.
 
         Returns:
-            LLMMetadata object with extracted information.
+            LLMMetadataOutput object with extracted information.
         """
         return self._metadata_extractor.extract_metadata(messages, result_message)

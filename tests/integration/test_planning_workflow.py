@@ -12,8 +12,8 @@ from github.Issue import Issue as GithubIssue
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
+from troller.worker.activities.activity_outputs import LLMMetadataOutput
 from troller.worker.activities.github_activities import fetch_issue
 from troller.worker.activities.planning_activities import run_planning_agent
 from troller.worker.workflows.data_structures import IssueResolutionWorkflowInput
@@ -44,13 +44,13 @@ We need to add user authentication to the application.
 
 
 @pytest.fixture
-def expected_llm_metadata() -> LLMMetadata:
+def expected_llm_metadata() -> LLMMetadataOutput:
     """Create expected LLM metadata for testing.
 
     Returns:
-        LLMMetadata with realistic execution information.
+        LLMMetadataOutput with realistic execution information.
     """
-    return LLMMetadata(
+    return LLMMetadataOutput(
         total_cost_usd=0.15,
         input_tokens=1000,
         output_tokens=500,
@@ -111,7 +111,7 @@ def expected_plan() -> Plan:
 async def test_planning_workflow_end_to_end(
     mock_github_issue: MagicMock,
     expected_plan: Plan,
-    expected_llm_metadata: LLMMetadata,
+    expected_llm_metadata: LLMMetadataOutput,
 ) -> None:
     """Workflow executes end-to-end: fetch_issue → run_planning_agent → returns Plan.
 
@@ -209,7 +209,7 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
             )
 
             # Create test LLM metadata
-            test_llm_metadata = LLMMetadata(
+            test_llm_metadata = LLMMetadataOutput(
                 total_cost_usd=0.10,
                 input_tokens=800,
                 output_tokens=400,
@@ -295,7 +295,7 @@ async def test_planning_workflow_validates_step_structure() -> None:
             )
 
             # Create test LLM metadata
-            test_llm_metadata = LLMMetadata(
+            test_llm_metadata = LLMMetadataOutput(
                 total_cost_usd=0.12,
                 input_tokens=900,
                 output_tokens=450,
@@ -381,7 +381,7 @@ async def test_planning_workflow_with_optional_fields() -> None:
             )
 
             # Create test LLM metadata
-            test_llm_metadata = LLMMetadata(
+            test_llm_metadata = LLMMetadataOutput(
                 total_cost_usd=0.20,
                 input_tokens=1200,
                 output_tokens=600,
