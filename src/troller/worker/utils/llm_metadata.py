@@ -1,7 +1,7 @@
 """Metadata extraction from Claude Agent SDK messages.
 
 Pure logic for extracting and structuring LLM metadata from SDK messages.
-Separated for testability and single responsibility.
+Shared utility for activities that interact with LLMs.
 """
 
 from typing import Any

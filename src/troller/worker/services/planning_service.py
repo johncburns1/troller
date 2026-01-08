@@ -17,8 +17,8 @@ from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.activity_outputs import LLMMetadataOutput
 from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
-from troller.worker.services.metadata_extractor import MetadataExtractor
 from troller.worker.services.planning_models import PlanResponse
+from troller.worker.utils.llm_metadata import MetadataExtractor
 
 
 class PlanningService:

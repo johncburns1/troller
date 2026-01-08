@@ -3,7 +3,7 @@
 from typing import Any
 
 
-from troller.worker.services.metadata_extractor import MetadataExtractor
+from troller.worker.utils.llm_metadata import MetadataExtractor
 
 
 class MockToolUseBlock:
