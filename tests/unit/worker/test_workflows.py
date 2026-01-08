@@ -22,7 +22,10 @@ from troller.worker.activities.planning_activities import (
     PlanningInput,
     run_planning_agent,
 )
-from troller.worker.workflows.data_structures import IssueResolutionWorkflowInput
+from troller.worker.workflows.data_structures import (
+    IssueResolutionWorkflowInput,
+    IssueResolutionWorkflowOutput,
+)
 from troller.worker.workflows.issue_resolution import IssueResolutionWorkflow
 
 
@@ -105,10 +108,10 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                         task_queue="test-queue",
                     )
 
-                    # Verify result is a Plan
-                    assert isinstance(result, Plan)
-                    assert result.summary.startswith("Implementation plan for:")
-                    assert len(result.steps) > 0
+                    # Verify result is a workflow output with plan
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.plan.summary.startswith("Implementation plan for:")
+                    assert len(result.plan.steps) > 0
 
 
 @pytest.mark.asyncio
@@ -189,12 +192,13 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                     )
 
                     # Verify plan structure
-                    assert isinstance(result, Plan)
-                    assert result.summary != ""
-                    assert len(result.steps) == 3
-                    assert all(isinstance(step, PlanStep) for step in result.steps)
-                    assert all(step.id.startswith("step-") for step in result.steps)
-                    assert result.created_at is not None
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.plan.summary != ""
+                    assert len(result.plan.steps) == 3
+                    assert all(
+                        step.id.startswith("step-") for step in result.plan.steps
+                    )
+                    assert result.plan.created_at is not None
 
 
 @pytest.mark.asyncio
@@ -272,7 +276,7 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
 
                     # Verify result is returned successfully
                     # (state verification would require workflow queries/signals)
-                    assert isinstance(result, Plan)
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
 
 
 @pytest.mark.asyncio
@@ -354,7 +358,7 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                         task_queue="test-queue",
                     )
 
-                    assert isinstance(result, Plan)
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
 
                     # Test without target_branch
                     input_without_branch = IssueResolutionWorkflowInput(
@@ -370,7 +374,7 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                         task_queue="test-queue",
                     )
 
-                    assert isinstance(result, Plan)
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
 
 
 @pytest.mark.asyncio

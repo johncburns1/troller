@@ -104,3 +104,43 @@ class PlanOutput(BaseModel):
     testing_strategy: str | None = Field(None, description="Testing strategy")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata")
     based_on_commit: str | None = Field(None, description="Based on commit SHA")
+
+
+class InternalReviewFeedbackOutput(BaseModel):
+    """Internal review feedback from Review Agent.
+
+    Attributes:
+        approved: Whether the Review Agent approved the code.
+        comments: Internal review comments.
+        suggested_changes: Specific code changes requested.
+        timestamp: When the review was completed.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    approved: bool = Field(..., description="Approval status")
+    comments: list[str] = Field(default_factory=list, description="Review comments")
+    suggested_changes: list[str] = Field(
+        default_factory=list, description="Suggested changes"
+    )
+    timestamp: datetime = Field(..., description="Review timestamp")
+
+
+class CommitOutput(BaseModel):
+    """Code commit with optional internal review feedback.
+
+    Attributes:
+        sha: Git commit SHA.
+        message: Commit message.
+        timestamp: When the commit was created.
+        internal_review_feedback: Optional Review Agent feedback.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    sha: str = Field(..., description="Git commit SHA")
+    message: str = Field(..., description="Commit message")
+    timestamp: datetime = Field(..., description="Commit timestamp")
+    internal_review_feedback: InternalReviewFeedbackOutput | None = Field(
+        None, description="Internal review feedback"
+    )

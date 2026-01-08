@@ -5,6 +5,8 @@ These structures define inputs and outputs for workflows and activities.
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from troller.worker.activities.activity_outputs import PlanOutput
+
 
 class IssueResolutionWorkflowInput(BaseModel):
     """Input parameters for the issue resolution workflow.
@@ -24,3 +26,15 @@ class IssueResolutionWorkflowInput(BaseModel):
     target_branch: str | None = Field(
         default=None, description="Base branch (defaults to main/master if None)"
     )
+
+
+class IssueResolutionWorkflowOutput(BaseModel):
+    """Output from the issue resolution workflow.
+
+    Attributes:
+        plan: The generated implementation plan.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    plan: PlanOutput = Field(..., description="Generated implementation plan")

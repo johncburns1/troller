@@ -16,7 +16,10 @@ from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.activity_outputs import LLMMetadataOutput
 from troller.worker.activities.github_activities import fetch_issue
 from troller.worker.activities.planning_activities import run_planning_agent
-from troller.worker.workflows.data_structures import IssueResolutionWorkflowInput
+from troller.worker.workflows.data_structures import (
+    IssueResolutionWorkflowInput,
+    IssueResolutionWorkflowOutput,
+)
 from troller.worker.workflows.issue_resolution import IssueResolutionWorkflow
 
 
@@ -161,10 +164,10 @@ async def test_planning_workflow_end_to_end(
                         task_queue="test-task-queue",
                     )
 
-                    # Verify workflow returned the plan
-                    assert result is not None
-                    assert result.summary == expected_plan.summary
-                    assert len(result.steps) == len(expected_plan.steps)
+                    # Verify workflow returned the workflow output
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.plan.summary == expected_plan.summary
+                    assert len(result.plan.steps) == len(expected_plan.steps)
 
 
 @pytest.mark.asyncio
@@ -248,8 +251,9 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
                     )
 
                     # Verify metadata
-                    assert "issue_number" in result.metadata
-                    assert result.metadata["issue_number"] == 123
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert "issue_number" in result.plan.metadata
+                    assert result.plan.metadata["issue_number"] == 123
 
 
 @pytest.mark.asyncio
@@ -334,8 +338,9 @@ async def test_planning_workflow_validates_step_structure() -> None:
                     )
 
                     # Validate step structure
-                    assert len(result.steps) == 3
-                    for step in result.steps:
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert len(result.plan.steps) == 3
+                    for step in result.plan.steps:
                         # Required fields
                         assert isinstance(step.id, str)
                         assert isinstance(step.description, str)
@@ -420,6 +425,7 @@ async def test_planning_workflow_with_optional_fields() -> None:
                     )
 
                     # Verify metadata preserved
-                    assert result.metadata["issue_number"] == 789
-                    assert "skill_output" in result.metadata
-                    assert "custom_data" in result.metadata
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.plan.metadata["issue_number"] == 789
+                    assert "skill_output" in result.plan.metadata
+                    assert "custom_data" in result.plan.metadata
