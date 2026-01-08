@@ -11,10 +11,13 @@ from github.Issue import Issue as GithubIssue
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from troller.domain.models.issue import Issue
-from troller.domain.models.llm_metadata import LLMMetadata
 from troller.domain.models.plan import Plan, PlanStep
-from troller.worker.activities.github_activities import FetchIssueInput, fetch_issue
+from troller.worker.activities.activity_outputs import LLMMetadataOutput
+from troller.worker.activities.github_activities import (
+    FetchIssueInput,
+    FetchIssueOutput,
+    fetch_issue,
+)
 from troller.worker.activities.planning_activities import (
     PlanningInput,
     run_planning_agent,
@@ -64,7 +67,7 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                 created_at=datetime.now(),
                 metadata={"issue_number": 123},
             )
-            expected_metadata = LLMMetadata(
+            expected_metadata = LLMMetadataOutput(
                 total_cost_usd=0.10,
                 input_tokens=800,
                 output_tokens=400,
@@ -149,7 +152,7 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                 created_at=datetime.now(),
                 metadata={},
             )
-            expected_metadata = LLMMetadata(
+            expected_metadata = LLMMetadataOutput(
                 total_cost_usd=0.10,
                 input_tokens=800,
                 output_tokens=400,
@@ -231,7 +234,7 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
                 created_at=datetime.now(),
                 metadata={},
             )
-            expected_metadata = LLMMetadata(
+            expected_metadata = LLMMetadataOutput(
                 total_cost_usd=0.10,
                 input_tokens=800,
                 output_tokens=400,
@@ -313,7 +316,7 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                 created_at=datetime.now(),
                 metadata={},
             )
-            expected_metadata = LLMMetadata(
+            expected_metadata = LLMMetadataOutput(
                 total_cost_usd=0.10,
                 input_tokens=800,
                 output_tokens=400,
@@ -398,7 +401,7 @@ async def test_fetch_issue_activity_returns_issue_data() -> None:
             )
             result = await fetch_issue(input_data)
 
-            assert isinstance(result, Issue)
+            assert isinstance(result, FetchIssueOutput)
             assert result.number == 999
             assert result.title == "Test Issue #999"
             assert result.description == "Test issue description"
@@ -431,7 +434,7 @@ async def test_run_planning_agent_activity_returns_plan() -> None:
                 created_at=datetime.now(),
                 metadata={"issue_number": 123},
             )
-            expected_metadata = LLMMetadata(
+            expected_metadata = LLMMetadataOutput(
                 total_cost_usd=0.08,
                 input_tokens=600,
                 output_tokens=300,
@@ -446,16 +449,13 @@ async def test_run_planning_agent_activity_returns_plan() -> None:
                 return_value=(expected_plan, expected_metadata)
             )
 
-            # Test
-            issue = Issue(
-                number=123,
-                title="Test Issue",
-                description="Test description",
-                labels=["bug"],
-                url="https://github.com/test/repo/issues/123",
-            )
+            # Test with activity input
             planning_input = PlanningInput(
-                issue=issue,
+                issue_number=123,
+                issue_title="Test Issue",
+                issue_description="Test description",
+                issue_labels=["bug"],
+                issue_url="https://github.com/test/repo/issues/123",
                 repo_owner="test",
                 repo_name="repo",
             )
@@ -469,7 +469,5 @@ async def test_run_planning_agent_activity_returns_plan() -> None:
             assert isinstance(result, PlanningActivityOutput)
             assert result.plan.summary != ""
             assert len(result.plan.steps) > 0
-            assert all(isinstance(step, PlanStep) for step in result.plan.steps)
             assert result.plan.created_at is not None
             assert isinstance(result.plan.metadata, dict)
-            assert isinstance(result.llm_metadata, LLMMetadata)

@@ -13,6 +13,7 @@ with workflow.unsafe.imports_passed_through():
     from troller.domain.models.plan import Plan
     from troller.worker.activities.github_activities import (
         FetchIssueInput,
+        FetchIssueOutput,
         fetch_issue,
     )
     from troller.worker.activities.planning_activities import (
@@ -49,7 +50,7 @@ class IssueResolutionWorkflow:
             ActivityError: If any activity fails.
         """
         # Fetch issue from GitHub
-        self._issue = await workflow.execute_activity(
+        issue_output: FetchIssueOutput = await workflow.execute_activity(
             fetch_issue,
             FetchIssueInput(
                 repo_owner=input.repo_owner,
@@ -64,11 +65,25 @@ class IssueResolutionWorkflow:
             ),
         )
 
+        # Convert activity output to domain model (domain models live in workflow)
+        self._issue = Issue(
+            number=issue_output.number,
+            title=issue_output.title,
+            description=issue_output.description,
+            labels=issue_output.labels,
+            url=issue_output.url,
+        )
+
         # Run planning agent (may take a few minutes due to repo cloning and exploration)
+        # Pass issue data as individual fields
         planning_output = await workflow.execute_activity(
             run_planning_agent,
             PlanningInput(
-                issue=self._issue,
+                issue_number=self._issue.number,
+                issue_title=self._issue.title,
+                issue_description=self._issue.description,
+                issue_labels=self._issue.labels,
+                issue_url=self._issue.url,
                 repo_owner=input.repo_owner,
                 repo_name=input.repo_name,
                 target_branch=input.target_branch,
@@ -83,8 +98,27 @@ class IssueResolutionWorkflow:
             ),
         )
 
-        # Extract plan from activity output
-        self._plan = planning_output.plan
+        # Convert activity outputs to domain models (domain models live in workflow)
+        from troller.domain.models.plan import Plan, PlanStep
+
+        self._plan = Plan(
+            summary=planning_output.plan.summary,
+            steps=[
+                PlanStep(
+                    id=step.id,
+                    description=step.description,
+                    completed=step.completed,
+                    related_files=step.related_files,
+                    estimated_complexity=step.estimated_complexity,
+                )
+                for step in planning_output.plan.steps
+            ],
+            created_at=planning_output.plan.created_at,
+            technical_approach=planning_output.plan.technical_approach,
+            testing_strategy=planning_output.plan.testing_strategy,
+            metadata=planning_output.plan.metadata,
+            based_on_commit=planning_output.plan.based_on_commit,
+        )
 
         # Return the plan (guaranteed to be set by activity execution)
         assert self._plan is not None
