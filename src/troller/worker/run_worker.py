@@ -13,7 +13,12 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from troller.config import config
-from troller.worker.activities.github_activities import fetch_issue
+from troller.worker.activities.github_activities import (
+    create_feature_branch,
+    create_pull_request,
+    fetch_issue,
+)
+from troller.worker.activities.implementation_activities import run_implementation_agent
 from troller.worker.activities.planning_activities import run_planning_agent
 from troller.worker.data_converter import pydantic_data_converter
 from troller.worker.workflows.issue_resolution import IssueResolutionWorkflow
@@ -47,7 +52,13 @@ async def run_worker(temporal_address: str, task_queue: str) -> None:
             client,
             task_queue=task_queue,
             workflows=[IssueResolutionWorkflow],
-            activities=[fetch_issue, run_planning_agent],
+            activities=[
+                fetch_issue,
+                create_feature_branch,
+                create_pull_request,
+                run_planning_agent,
+                run_implementation_agent,
+            ],
         )
 
         logger.info("Worker started successfully. Press Ctrl+C to stop.")

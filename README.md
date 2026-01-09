@@ -54,6 +54,32 @@ Configuration priority (highest to lowest):
 3. `.env` file
 4. Default values
 
+### LLM Provider
+
+Troller uses the Claude Agent SDK which supports multiple providers:
+
+**Anthropic API (default)**:
+
+```bash
+ANTHROPIC_API_KEY=your_api_key_here
+```
+
+**AWS Bedrock**:
+
+```bash
+CLAUDE_CODE_USE_BEDROCK=1
+
+# Optional: Configure AWS region/profile
+LLM_BEDROCK_REGION=us-west-2
+LLM_BEDROCK_PROFILE=your_profile
+```
+
+For Bedrock, configure AWS credentials via one of:
+
+- Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+- AWS credentials file (`~/.aws/credentials`)
+- IAM role (when running on AWS infrastructure)
+
 ## Running the Worker
 
 Start a local Temporal dev server (in a separate terminal):

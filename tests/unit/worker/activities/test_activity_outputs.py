@@ -2,7 +2,6 @@
 
 from troller.worker.activities.activity_outputs import (
     FileOperationOutput,
-    VerificationOutput,
     TDDSubstepOutput,
     PlanStepOutput,
 )

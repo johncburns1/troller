@@ -4,7 +4,7 @@ import os
 from unittest.mock import patch
 
 
-from troller.config import ClaudeModelConfig, Config
+from troller.config import ClaudeModelConfig, Config, LLMProviderConfig
 
 
 class TestClaudeModelConfig:
@@ -83,3 +83,65 @@ class TestConfig:
             assert config.claude.planning_model == "env-planning"
             assert config.claude.coding_model == "env-coding"
             assert config.claude.review_model == "env-review"
+
+    def test_config_includes_llm_provider_config(self) -> None:
+        """Config includes llm_provider field with LLMProviderConfig."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = Config()
+            assert hasattr(config, "llm_provider")
+            assert isinstance(config.llm_provider, LLMProviderConfig)
+
+
+class TestLLMProviderConfig:
+    """Test suite for LLM provider configuration."""
+
+    def test_default_provider_is_anthropic(self) -> None:
+        """LLMProviderConfig defaults to anthropic provider."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = LLMProviderConfig()
+            assert config.provider == "anthropic"
+
+    def test_provider_can_be_set_to_bedrock(self) -> None:
+        """LLMProviderConfig allows setting provider to bedrock."""
+        with patch.dict(os.environ, {"LLM_PROVIDER": "bedrock"}):
+            config = LLMProviderConfig()
+            assert config.provider == "bedrock"
+
+    def test_default_bedrock_region(self) -> None:
+        """LLMProviderConfig defaults bedrock_region to us-west-2."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = LLMProviderConfig()
+            assert config.bedrock_region == "us-west-2"
+
+    def test_bedrock_region_from_environment(self) -> None:
+        """LLMProviderConfig reads bedrock_region from LLM_BEDROCK_REGION."""
+        with patch.dict(os.environ, {"LLM_BEDROCK_REGION": "us-east-1"}):
+            config = LLMProviderConfig()
+            assert config.bedrock_region == "us-east-1"
+
+    def test_default_bedrock_profile_is_none(self) -> None:
+        """LLMProviderConfig defaults bedrock_profile to None."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = LLMProviderConfig()
+            assert config.bedrock_profile is None
+
+    def test_bedrock_profile_from_environment(self) -> None:
+        """LLMProviderConfig reads bedrock_profile from LLM_BEDROCK_PROFILE."""
+        with patch.dict(os.environ, {"LLM_BEDROCK_PROFILE": "my-profile"}):
+            config = LLMProviderConfig()
+            assert config.bedrock_profile == "my-profile"
+
+    def test_full_bedrock_configuration(self) -> None:
+        """LLMProviderConfig reads all bedrock settings together."""
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "bedrock",
+                "LLM_BEDROCK_REGION": "eu-west-1",
+                "LLM_BEDROCK_PROFILE": "production",
+            },
+        ):
+            config = LLMProviderConfig()
+            assert config.provider == "bedrock"
+            assert config.bedrock_region == "eu-west-1"
+            assert config.bedrock_profile == "production"

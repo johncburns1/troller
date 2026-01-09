@@ -1,6 +1,5 @@
 """Tests for TDD response Pydantic models."""
 
-import pytest
 from troller.worker.services.planning_models import (
     FileOperationResponse,
     VerificationResponse,

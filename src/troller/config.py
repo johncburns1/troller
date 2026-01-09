@@ -7,6 +7,8 @@ Configuration is loaded from multiple sources with the following priority:
 4. Default values defined here (least specific)
 """
 
+from typing import Literal
+
 from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -75,6 +77,27 @@ class GitHubConfig(BaseSettings):
     api_url: str = "https://api.github.com"
 
 
+class LLMProviderConfig(BaseSettings):
+    """LLM provider configuration for switching between Anthropic and AWS Bedrock.
+
+    Attributes:
+        provider: LLM provider to use ('anthropic' or 'bedrock').
+        bedrock_region: AWS region for Bedrock (default: us-west-2).
+        bedrock_profile: AWS profile for Bedrock credentials (optional).
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="LLM_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    provider: Literal["anthropic", "bedrock"] = "anthropic"
+    bedrock_region: str = "us-west-2"
+    bedrock_profile: str | None = None
+
+
 class Config(BaseSettings):
     """Main application configuration.
 
@@ -82,6 +105,7 @@ class Config(BaseSettings):
         temporal: Temporal server configuration.
         github: GitHub API configuration.
         claude: Claude AI model configuration.
+        llm_provider: LLM provider configuration (Anthropic or Bedrock).
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR).
     """
 
@@ -94,6 +118,7 @@ class Config(BaseSettings):
     temporal: TemporalConfig = Field(default_factory=TemporalConfig)
     github: GitHubConfig = Field(default_factory=GitHubConfig)
     claude: ClaudeModelConfig = Field(default_factory=ClaudeModelConfig)
+    llm_provider: LLMProviderConfig = Field(default_factory=LLMProviderConfig)
     log_level: str = "INFO"
 
 
