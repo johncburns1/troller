@@ -4,7 +4,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from troller.domain.models.plan import Plan, PlanStep
+from troller.domain.models.plan import (
+    FileOperation,
+    Plan,
+    PlanStep,
+    TDDSubstep,
+    Verification,
+)
 
 
 def test_plan_step_creation() -> None:
@@ -278,3 +284,212 @@ def test_plan_with_all_fields_including_commit() -> None:
     assert plan.testing_strategy == "TDD with unit tests"
     assert plan.metadata["issue_number"] == 27
     assert len(plan.steps) == 1
+
+
+# ============================================================================
+# TDD Domain Model Tests
+# ============================================================================
+
+
+def test_file_operation_create() -> None:
+    """Create a FileOperation for creating a new file."""
+    op = FileOperation(
+        operation="create",
+        file_path="src/auth/jwt.py",
+        description="Create JWT adapter",
+    )
+    assert op.operation == "create"
+    assert op.file_path == "src/auth/jwt.py"
+    assert op.description == "Create JWT adapter"
+    assert op.line_range is None
+    assert op.code_snippet is None
+
+
+def test_file_operation_modify_with_lines() -> None:
+    """Create a FileOperation for modifying specific lines."""
+    op = FileOperation(
+        operation="modify",
+        file_path="src/auth/jwt.py",
+        line_range="45-67",
+        description="Add validation method",
+        code_snippet="def validate(self): pass",
+    )
+    assert op.operation == "modify"
+    assert op.file_path == "src/auth/jwt.py"
+    assert op.line_range == "45-67"
+    assert op.description == "Add validation method"
+    assert op.code_snippet == "def validate(self): pass"
+
+
+def test_verification_command() -> None:
+    """Create a Verification with expected failure."""
+    v = Verification(
+        command="uv run pytest tests/test_auth.py -v",
+        expected_outcome="fail",
+        expected_text="FAILED",
+    )
+    assert v.command == "uv run pytest tests/test_auth.py -v"
+    assert v.expected_outcome == "fail"
+    assert v.expected_text == "FAILED"
+    assert v.timeout_seconds == 120  # default
+
+
+def test_verification_command_with_custom_timeout() -> None:
+    """Create a Verification with custom timeout."""
+    v = Verification(
+        command="uv run pytest tests/ -v",
+        expected_outcome="pass",
+        timeout_seconds=300,
+    )
+    assert v.command == "uv run pytest tests/ -v"
+    assert v.expected_outcome == "pass"
+    assert v.expected_text is None
+    assert v.timeout_seconds == 300
+
+
+def test_tdd_substep() -> None:
+    """Create a TDDSubstep for writing a test."""
+    substep = TDDSubstep(
+        id="step-1.1",
+        phase="write_test",
+        description="Write failing test",
+        file_operations=[],
+    )
+    assert substep.id == "step-1.1"
+    assert substep.phase == "write_test"
+    assert substep.description == "Write failing test"
+    assert substep.file_operations == []
+    assert substep.verification is None
+    assert substep.code_hints == {}
+    assert substep.completed is False
+    assert substep.result is None
+
+
+def test_tdd_substep_with_file_operations() -> None:
+    """Create a TDDSubstep with file operations."""
+    file_op = FileOperation(
+        operation="create",
+        file_path="tests/test_auth.py",
+        description="Create test file",
+    )
+    verification = Verification(
+        command="uv run pytest tests/test_auth.py -v",
+        expected_outcome="fail",
+        expected_text="FAILED",
+    )
+    substep = TDDSubstep(
+        id="step-1.1",
+        phase="write_test",
+        description="Write failing test for JWT validation",
+        file_operations=[file_op],
+        verification=verification,
+        code_hints={"import": "from auth.jwt import JWTValidator"},
+    )
+    assert substep.id == "step-1.1"
+    assert len(substep.file_operations) == 1
+    assert substep.file_operations[0].file_path == "tests/test_auth.py"
+    assert substep.verification is not None
+    assert substep.verification.expected_outcome == "fail"
+    assert substep.code_hints["import"] == "from auth.jwt import JWTValidator"
+
+
+def test_plan_step_with_substeps() -> None:
+    """Create a PlanStep with TDD substeps."""
+    substep = TDDSubstep(
+        id="step-1.1",
+        phase="write_test",
+        description="Write test",
+        file_operations=[],
+    )
+    step = PlanStep(
+        id="step-1",
+        description="Implement feature",
+        substeps=[substep],
+        commit_message_template="feat: add feature",
+    )
+    assert step.id == "step-1"
+    assert step.description == "Implement feature"
+    assert len(step.substeps) == 1
+    assert step.substeps[0].id == "step-1.1"
+    assert step.commit_message_template == "feat: add feature"
+
+
+def test_plan_step_backwards_compatible() -> None:
+    """Existing code without substeps should still work."""
+    step = PlanStep(
+        id="step-1",
+        description="Simple step",
+    )
+    assert step.id == "step-1"
+    assert step.description == "Simple step"
+    assert step.completed is False  # default
+    assert step.substeps == []
+    assert step.commit_message_template is None
+    assert step.depends_on == []
+    assert step.preconditions == []
+
+
+def test_plan_step_with_dependencies() -> None:
+    """Create a PlanStep with dependencies on other steps."""
+    step = PlanStep(
+        id="step-2",
+        description="Build on step 1",
+        depends_on=["step-1"],
+    )
+    assert step.id == "step-2"
+    assert step.depends_on == ["step-1"]
+
+
+def test_plan_step_with_preconditions() -> None:
+    """Create a PlanStep with preconditions."""
+    precondition = Verification(
+        command="uv run pytest tests/unit/ -v",
+        expected_outcome="pass",
+    )
+    step = PlanStep(
+        id="step-1",
+        description="Step with precondition",
+        preconditions=[precondition],
+    )
+    assert step.id == "step-1"
+    assert len(step.preconditions) == 1
+    assert step.preconditions[0].expected_outcome == "pass"
+
+
+def test_plan_step_with_all_new_fields() -> None:
+    """Create a PlanStep with all new TDD-related fields."""
+    file_op = FileOperation(
+        operation="modify",
+        file_path="src/feature.py",
+        description="Implement feature",
+    )
+    substep = TDDSubstep(
+        id="step-1.1",
+        phase="implement",
+        description="Implement the feature",
+        file_operations=[file_op],
+    )
+    precondition = Verification(
+        command="uv run pytest tests/unit/ -v",
+        expected_outcome="pass",
+    )
+    step = PlanStep(
+        id="step-1",
+        description="Implement feature X",
+        completed=False,
+        related_files=["src/feature.py"],
+        estimated_complexity="moderate",
+        substeps=[substep],
+        commit_message_template="feat: implement feature X",
+        depends_on=["step-0"],
+        preconditions=[precondition],
+    )
+    assert step.id == "step-1"
+    assert step.description == "Implement feature X"
+    assert step.completed is False
+    assert step.related_files == ["src/feature.py"]
+    assert step.estimated_complexity == "moderate"
+    assert len(step.substeps) == 1
+    assert step.commit_message_template == "feat: implement feature X"
+    assert step.depends_on == ["step-0"]
+    assert len(step.preconditions) == 1

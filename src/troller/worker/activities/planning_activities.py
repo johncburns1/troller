@@ -8,9 +8,12 @@ from temporalio import activity
 
 from troller.config import config
 from troller.worker.activities.activity_outputs import (
+    FileOperationOutput,
     LLMMetadataOutput,
     PlanOutput,
     PlanStepOutput,
+    TDDSubstepOutput,
+    VerificationOutput,
 )
 from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
@@ -101,6 +104,48 @@ async def run_planning_agent(input: PlanningInput) -> PlanningActivityOutput:
                 completed=step.completed,
                 related_files=step.related_files,
                 estimated_complexity=step.estimated_complexity,
+                substeps=[
+                    TDDSubstepOutput(
+                        id=substep.id,
+                        phase=substep.phase,
+                        description=substep.description,
+                        file_operations=[
+                            FileOperationOutput(
+                                operation=file_op.operation,
+                                file_path=file_op.file_path,
+                                description=file_op.description,
+                                line_range=file_op.line_range,
+                                code_snippet=file_op.code_snippet,
+                            )
+                            for file_op in substep.file_operations
+                        ],
+                        verification=(
+                            VerificationOutput(
+                                command=substep.verification.command,
+                                expected_outcome=substep.verification.expected_outcome,
+                                expected_text=substep.verification.expected_text,
+                                timeout_seconds=substep.verification.timeout_seconds,
+                            )
+                            if substep.verification
+                            else None
+                        ),
+                        code_hints=substep.code_hints,
+                        completed=substep.completed,
+                        result=substep.result,
+                    )
+                    for substep in step.substeps
+                ],
+                commit_message_template=step.commit_message_template,
+                depends_on=step.depends_on,
+                preconditions=[
+                    VerificationOutput(
+                        command=precondition.command,
+                        expected_outcome=precondition.expected_outcome,
+                        expected_text=precondition.expected_text,
+                        timeout_seconds=precondition.timeout_seconds,
+                    )
+                    for precondition in step.preconditions
+                ],
             )
             for step in plan.steps
         ],

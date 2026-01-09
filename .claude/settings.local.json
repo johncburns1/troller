@@ -22,7 +22,7 @@
       "Bash(gh issue create:*)",
       "Bash(gh issue edit:*)",
       "Bash(uv sync:*)",
-      "Bash(mkdir:*)"
+      "Skill(superpowers:subagent-driven-development)"
     ]
   }
 }

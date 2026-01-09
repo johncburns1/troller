@@ -13,7 +13,13 @@ from typing import Any
 
 from claude_agent_sdk import ClaudeAgentOptions
 
-from troller.domain.models.plan import Plan, PlanStep
+from troller.domain.models.plan import (
+    FileOperation,
+    Plan,
+    PlanStep,
+    TDDSubstep,
+    Verification,
+)
 from troller.worker.activities.activity_outputs import LLMMetadataOutput
 from troller.worker.activities.llm_metadata import MetadataExtractor
 from troller.worker.adapters.claude_client import ClaudeClient
@@ -165,9 +171,24 @@ Issue #{issue_number}: {issue_title}
 
 Create a comprehensive implementation plan using Skill(feature-planner).
 
+IMPORTANT: Generate TDD-structured substeps for each plan step following this pattern:
+1. write_test - Write a failing test that defines the expected behavior
+2. verify_fails - Run the test to confirm it fails (proves test is valid)
+3. implement - Write minimal code to make the test pass
+4. verify_passes - Run the test to confirm it passes
+5. commit - Commit the working code
+
+Each substep should include:
+- file_operations: Exact files to create/modify with code snippets
+- verification: Command to run with expected outcome (pass/fail)
+- code_hints: Key code snippets for guidance
+
 Return a structured plan with:
 - summary: High-level description of what needs to be done
-- steps: Ordered list of implementation steps (with id, description, related_files, estimated_complexity)
+- steps: Ordered list of implementation steps, each containing:
+  - id, description, related_files, estimated_complexity
+  - substeps: TDD cycle substeps with file_operations and verification commands
+  - commit_message_template: Conventional commit message for this step
 - technical_approach: Architecture decisions and patterns to use
 - testing_strategy: How to test the implementation"""
 
@@ -205,34 +226,69 @@ Return a structured plan with:
         issue_number: int,
         commit_sha: str,
     ) -> Plan:
-        """Convert validated PlanResponse to Plan domain model.
+        """Convert validated PlanResponse to Plan domain model."""
+        steps = []
+        for step in plan_response.steps:
+            # Convert substeps if present
+            substeps = []
+            for substep in step.substeps:
+                file_ops = [
+                    FileOperation(
+                        operation=op.operation,
+                        file_path=op.file_path,
+                        description=op.description,
+                        line_range=op.line_range,
+                        code_snippet=op.code_snippet,
+                    )
+                    for op in substep.file_operations
+                ]
+                verification = None
+                if substep.verification:
+                    verification = Verification(
+                        command=substep.verification.command,
+                        expected_outcome=substep.verification.expected_outcome,
+                        expected_text=substep.verification.expected_text,
+                        timeout_seconds=substep.verification.timeout_seconds,
+                    )
+                substeps.append(
+                    TDDSubstep(
+                        id=substep.id,
+                        phase=substep.phase,
+                        description=substep.description,
+                        file_operations=file_ops,
+                        verification=verification,
+                        code_hints=substep.code_hints,
+                        completed=substep.completed,
+                        result=substep.result,
+                    )
+                )
 
-        Args:
-            plan_response: Validated Pydantic model from structured output.
-            issue_number: GitHub issue number for metadata.
-            commit_sha: Git commit SHA the plan was based on.
+            # Convert preconditions
+            preconditions = [
+                Verification(
+                    command=p.command,
+                    expected_outcome=p.expected_outcome,
+                    expected_text=p.expected_text,
+                    timeout_seconds=p.timeout_seconds,
+                )
+                for p in step.preconditions
+            ]
 
-        Returns:
-            Plan domain object with steps converted from PlanStepResponse.
-        """
-        # Convert PlanStepResponse objects to PlanStep domain objects
-        # Now includes related_files and estimated_complexity as first-class attributes
-        steps = [
-            PlanStep(
-                id=step.id,
-                description=step.description,
-                completed=step.completed,
-                related_files=step.related_files,
-                estimated_complexity=step.estimated_complexity,
+            steps.append(
+                PlanStep(
+                    id=step.id,
+                    description=step.description,
+                    completed=step.completed,
+                    related_files=step.related_files,
+                    estimated_complexity=step.estimated_complexity,
+                    substeps=substeps,
+                    commit_message_template=step.commit_message_template,
+                    depends_on=step.depends_on,
+                    preconditions=preconditions,
+                )
             )
-            for step in plan_response.steps
-        ]
 
-        # Build metadata with issue reference
-        # Note: technical_approach and testing_strategy are now first-class Plan attributes
-        metadata: dict[str, Any] = {
-            "issue_number": issue_number,
-        }
+        metadata: dict[str, Any] = {"issue_number": issue_number}
 
         return Plan(
             summary=plan_response.summary,

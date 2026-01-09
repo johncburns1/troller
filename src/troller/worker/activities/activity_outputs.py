@@ -10,6 +10,76 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class FileOperationOutput(BaseModel):
+    """Serializable file operation for Temporal.
+
+    Attributes:
+        operation: Type of operation (create, modify, delete, etc.).
+        file_path: Path to the file being operated on.
+        description: Human-readable description of the operation.
+        line_range: Optional line range for modifications.
+        code_snippet: Optional code snippet for the operation.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    operation: str = Field(..., description="Operation type")
+    file_path: str = Field(..., description="File path")
+    description: str = Field(..., description="Operation description")
+    line_range: str | None = Field(default=None, description="Line range")
+    code_snippet: str | None = Field(default=None, description="Code snippet")
+
+
+class VerificationOutput(BaseModel):
+    """Serializable verification command for Temporal.
+
+    Attributes:
+        command: The command to run for verification.
+        expected_outcome: Description of what success looks like.
+        expected_text: Optional text to look for in output.
+        timeout_seconds: Timeout for the verification command.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    command: str = Field(..., description="Verification command")
+    expected_outcome: str = Field(..., description="Expected outcome")
+    expected_text: str | None = Field(
+        default=None, description="Expected text in output"
+    )
+    timeout_seconds: int = Field(default=120, description="Timeout in seconds")
+
+
+class TDDSubstepOutput(BaseModel):
+    """Serializable TDD substep for Temporal.
+
+    Attributes:
+        id: Unique identifier for the substep.
+        phase: TDD phase (write_test, run_test_fail, implement, run_test_pass, refactor).
+        description: Human-readable description of the substep.
+        file_operations: List of file operations for this substep.
+        verification: Optional verification command.
+        code_hints: Hints for implementation.
+        completed: Whether this substep has been completed.
+        result: Optional result from completing the substep.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(..., description="Substep identifier")
+    phase: str = Field(..., description="TDD phase")
+    description: str = Field(..., description="Substep description")
+    file_operations: list[FileOperationOutput] = Field(
+        default_factory=list, description="File operations"
+    )
+    verification: VerificationOutput | None = Field(
+        default=None, description="Verification command"
+    )
+    code_hints: dict[str, str] = Field(default_factory=dict, description="Code hints")
+    completed: bool = Field(default=False, description="Whether substep is completed")
+    result: str | None = Field(default=None, description="Substep result")
+
+
 class PlanStepOutput(BaseModel):
     """Represents a single implementation plan step.
 
@@ -19,16 +89,30 @@ class PlanStepOutput(BaseModel):
         completed: Whether this step has been completed.
         related_files: Files that will be modified in this step.
         estimated_complexity: Estimated complexity level of this step.
+        substeps: TDD substeps for this step.
+        commit_message_template: Template for commit message.
+        depends_on: List of step IDs this step depends on.
+        preconditions: Verification commands to run before this step.
     """
 
     model_config = ConfigDict(frozen=True)
 
     id: str = Field(..., description="Unique step identifier")
     description: str = Field(..., description="Step description")
-    completed: bool = Field(..., description="Whether step is completed")
+    completed: bool = Field(default=False, description="Whether step is completed")
     related_files: list[str] = Field(default_factory=list, description="Related files")
     estimated_complexity: Literal["simple", "moderate", "complex"] | None = Field(
         default=None, description="Estimated complexity"
+    )
+    substeps: list[TDDSubstepOutput] = Field(
+        default_factory=list, description="TDD substeps"
+    )
+    commit_message_template: str | None = Field(
+        default=None, description="Commit message template"
+    )
+    depends_on: list[str] = Field(default_factory=list, description="Step dependencies")
+    preconditions: list[VerificationOutput] = Field(
+        default_factory=list, description="Precondition verifications"
     )
 
 
