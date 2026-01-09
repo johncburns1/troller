@@ -60,7 +60,7 @@ class TDDSubstep:
     """
 
     id: str
-    phase: Literal["write_test", "verify_fails", "implement", "verify_passes", "commit"]
+    phase: Literal["write_test", "verify_fails", "implement", "verify_passes", "refactor", "commit"]
     description: str
     file_operations: list[FileOperation] = field(default_factory=list)
     verification: Verification | None = None

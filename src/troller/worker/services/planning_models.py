@@ -43,7 +43,7 @@ class TDDSubstepResponse(BaseModel):
 
     id: str = Field(..., description="Substep ID (e.g., 'step-1.1')")
     phase: Literal[
-        "write_test", "verify_fails", "implement", "verify_passes", "commit"
+        "write_test", "verify_fails", "implement", "verify_passes", "refactor", "commit"
     ] = Field(..., description="TDD phase this substep represents")
     description: str = Field(..., description="What this substep does")
     file_operations: list[FileOperationResponse] = Field(
