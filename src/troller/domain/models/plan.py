@@ -9,6 +9,67 @@ from typing import Any, Literal
 
 
 @dataclass(frozen=True)
+class FileOperation:
+    """Specifies a file operation within a TDD substep.
+
+    Attributes:
+        operation: Type of file operation (create, modify, delete, test).
+        file_path: Path to the file being operated on.
+        description: Human-readable description of the operation.
+        line_range: Optional line range for modifications (e.g., "45-67").
+        code_snippet: Optional code snippet to guide implementation.
+    """
+
+    operation: Literal["create", "modify", "delete", "test"]
+    file_path: str
+    description: str
+    line_range: str | None = None
+    code_snippet: str | None = None
+
+
+@dataclass(frozen=True)
+class Verification:
+    """Verification command with expected outcome.
+
+    Attributes:
+        command: Command to run for verification.
+        expected_outcome: Expected result (pass, fail, output_contains).
+        expected_text: Text expected in output when outcome is "output_contains".
+        timeout_seconds: Maximum time to wait for command completion.
+    """
+
+    command: str
+    expected_outcome: Literal["pass", "fail", "output_contains"]
+    expected_text: str | None = None
+    timeout_seconds: int = 120
+
+
+@dataclass(frozen=True)
+class TDDSubstep:
+    """Atomic TDD operation within a plan step (2-5 minutes each).
+
+    Attributes:
+        id: Unique identifier for the substep (e.g., "step-1.1").
+        phase: TDD phase this substep represents.
+        description: Human-readable description of what this substep does.
+        file_operations: List of file operations to perform.
+        verification: Optional verification to run after file operations.
+        code_hints: Hints for the coding agent (e.g., imports, patterns).
+        completed: Whether this substep has been completed.
+        result: Result message after completion.
+    """
+
+    id: str
+    phase: Literal["write_test", "verify_fails", "implement", "verify_passes", "commit"]
+    description: str
+    file_operations: list[FileOperation] = field(default_factory=list)
+    verification: Verification | None = None
+    code_hints: dict[str, str] = field(default_factory=dict)
+    completed: bool = False
+    result: str | None = None
+
+
+@dataclass(frozen=True)
 class PlanStep:
     """A single step in an implementation plan.
 
@@ -18,13 +79,21 @@ class PlanStep:
         completed: Whether this step has been completed.
         related_files: Files that will be modified in this step.
         estimated_complexity: Estimated complexity level of this step.
+        substeps: TDD substeps for granular execution.
+        commit_message_template: Commit message template for this step.
+        depends_on: List of step IDs this step depends on.
+        preconditions: Verifications that must pass before starting this step.
     """
 
     id: str
     description: str
-    completed: bool
+    completed: bool = False
     related_files: list[str] = field(default_factory=list)
     estimated_complexity: Literal["simple", "moderate", "complex"] | None = None
+    substeps: list[TDDSubstep] = field(default_factory=list)
+    commit_message_template: str | None = None
+    depends_on: list[str] = field(default_factory=list)
+    preconditions: list[Verification] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
