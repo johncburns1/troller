@@ -2,6 +2,20 @@
 
 Troller is an autonomous GitHub issue resolution system that uses multi-agent AI to automatically implement low-priority issues end-to-end. It orchestrates Planning, Coding, and Review agents through Temporal workflows to analyze issues, generate implementation plans, write code, and iterate based on CI/CD feedback—freeing developers to focus on high-impact work.
 
+## Evolution of the Idea
+
+The project started from a simpler premise: building individual AI agents to augment software development workflow. Over time, the vision evolved:
+
+```text
+Individual Agents → Coordinated Multi-Agent System → Human-Out-of-Loop Automation
+```
+
+The goal shifted from "AI assists human" to "human assists AI (only when necessary)." This inversion required rethinking:
+
+- When to escalate vs. retry autonomously
+- How to preserve context across long-running workflows
+- What information humans need when they do intervene
+
 ## Quick Start
 
 ```bash
