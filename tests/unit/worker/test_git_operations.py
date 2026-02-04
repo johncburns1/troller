@@ -62,7 +62,13 @@ class TestGitOperations:
     async def test_commit_changes_commits_specific_files(self) -> None:
         """commit_changes commits only the specified files."""
         with patch("troller.worker.adapters.git_operations.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
+            # First call (add) succeeds, second call (diff --cached) returns 1 (has changes),
+            # third call (commit) succeeds
+            mock_run.side_effect = [
+                MagicMock(returncode=0),  # git add
+                MagicMock(returncode=1),  # git diff --cached --quiet (1 = has changes)
+                MagicMock(returncode=0),  # git commit
+            ]
 
             git_ops = GitOperations()
             await git_ops.commit_changes(
@@ -71,8 +77,8 @@ class TestGitOperations:
                 files=["file1.py", "file2.py"],
             )
 
-            # Verify git add and git commit were called
-            assert mock_run.call_count == 2
+            # Verify git add, git diff --cached, and git commit were called
+            assert mock_run.call_count == 3
 
             # Check git add call
             add_call_args = mock_run.call_args_list[0][0][0]
@@ -81,8 +87,19 @@ class TestGitOperations:
             assert "file1.py" in add_call_args
             assert "file2.py" in add_call_args
 
+            # Check git diff --cached --quiet call (verifies staged changes exist)
+            diff_call_args = mock_run.call_args_list[1][0][0]
+            assert diff_call_args == [
+                "git",
+                "-C",
+                "/tmp/test_repo",
+                "diff",
+                "--cached",
+                "--quiet",
+            ]
+
             # Check git commit call
-            commit_call_args = mock_run.call_args_list[1][0][0]
+            commit_call_args = mock_run.call_args_list[2][0][0]
             assert commit_call_args == [
                 "git",
                 "-C",
@@ -96,7 +113,13 @@ class TestGitOperations:
     async def test_commit_changes_commits_all_files_when_files_is_none(self) -> None:
         """commit_changes commits all changes when files parameter is None."""
         with patch("troller.worker.adapters.git_operations.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0)
+            # First call (add) succeeds, second call (diff --cached) returns 1 (has changes),
+            # third call (commit) succeeds
+            mock_run.side_effect = [
+                MagicMock(returncode=0),  # git add -A
+                MagicMock(returncode=1),  # git diff --cached --quiet (1 = has changes)
+                MagicMock(returncode=0),  # git commit
+            ]
 
             git_ops = GitOperations()
             await git_ops.commit_changes(
@@ -105,15 +128,26 @@ class TestGitOperations:
                 files=None,
             )
 
-            # Verify git add and git commit were called
-            assert mock_run.call_count == 2
+            # Verify git add, git diff --cached, and git commit were called
+            assert mock_run.call_count == 3
 
             # Check git add call (should use -A for all files)
             add_call_args = mock_run.call_args_list[0][0][0]
             assert add_call_args == ["git", "-C", "/tmp/test_repo", "add", "-A"]
 
+            # Check git diff --cached --quiet call (verifies staged changes exist)
+            diff_call_args = mock_run.call_args_list[1][0][0]
+            assert diff_call_args == [
+                "git",
+                "-C",
+                "/tmp/test_repo",
+                "diff",
+                "--cached",
+                "--quiet",
+            ]
+
             # Check git commit call
-            commit_call_args = mock_run.call_args_list[1][0][0]
+            commit_call_args = mock_run.call_args_list[2][0][0]
             assert commit_call_args == [
                 "git",
                 "-C",
@@ -128,11 +162,11 @@ class TestGitOperations:
         """commit_changes raises RuntimeError when git add fails."""
         with patch("troller.worker.adapters.git_operations.subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.CalledProcessError(
-                1, "git", stderr="file not found"
+                1, "git", output="", stderr="file not found"
             )
 
             git_ops = GitOperations()
-            with pytest.raises(RuntimeError, match="Failed to stage changes"):
+            with pytest.raises(RuntimeError, match="Failed to stage changes.*file not found"):
                 await git_ops.commit_changes(
                     repo_path="/tmp/test_repo",
                     message="Test commit",
@@ -143,14 +177,38 @@ class TestGitOperations:
     async def test_commit_changes_raises_error_on_commit_failure(self) -> None:
         """commit_changes raises RuntimeError when git commit fails."""
         with patch("troller.worker.adapters.git_operations.subprocess.run") as mock_run:
-            # First call (git add) succeeds, second call (git commit) fails
+            # First call (git add) succeeds, second call (diff --cached) returns 1 (has changes),
+            # third call (git commit) fails
             mock_run.side_effect = [
-                MagicMock(returncode=0),
-                subprocess.CalledProcessError(1, "git", stderr="nothing to commit"),
+                MagicMock(returncode=0),  # git add
+                MagicMock(returncode=1),  # git diff --cached --quiet (1 = has changes)
+                subprocess.CalledProcessError(
+                    1, "git", output="nothing to commit", stderr=""
+                ),
             ]
 
             git_ops = GitOperations()
-            with pytest.raises(RuntimeError, match="Failed to commit changes"):
+            with pytest.raises(RuntimeError, match="Failed to commit changes.*nothing to commit"):
+                await git_ops.commit_changes(
+                    repo_path="/tmp/test_repo",
+                    message="Test commit",
+                    files=None,
+                )
+
+    @pytest.mark.asyncio
+    async def test_commit_changes_raises_error_when_no_changes_staged(self) -> None:
+        """commit_changes raises RuntimeError when git add stages no changes."""
+        with patch("troller.worker.adapters.git_operations.subprocess.run") as mock_run:
+            # First call (git add) succeeds, second call (diff --cached) returns 0 (no changes)
+            mock_run.side_effect = [
+                MagicMock(returncode=0),  # git add
+                MagicMock(returncode=0),  # git diff --cached --quiet (0 = no changes)
+            ]
+
+            git_ops = GitOperations()
+            with pytest.raises(
+                RuntimeError, match="No changes to commit after git add"
+            ):
                 await git_ops.commit_changes(
                     repo_path="/tmp/test_repo",
                     message="Test commit",

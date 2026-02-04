@@ -90,9 +90,9 @@ class ImplementationService:
         temp_dir: Path | None = None
 
         try:
-            # Step 1: Clone the repository
+            # Step 1: Clone the feature branch (already created on remote by workflow)
             temp_dir, repo_path, commit_sha = await self._repo_cloner.clone_to_temp(
-                repo_owner, repo_name, target_branch
+                repo_owner, repo_name, branch_name
             )
 
             # Step 2: Invoke feature-implementation skill and execute implementation

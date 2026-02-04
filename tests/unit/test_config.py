@@ -95,17 +95,17 @@ class TestConfig:
 class TestLLMProviderConfig:
     """Test suite for LLM provider configuration."""
 
-    def test_default_provider_is_anthropic(self) -> None:
-        """LLMProviderConfig defaults to anthropic provider."""
+    def test_default_provider_is_bedrock(self) -> None:
+        """LLMProviderConfig defaults to bedrock provider."""
         with patch.dict(os.environ, {}, clear=True):
             config = LLMProviderConfig()
-            assert config.provider == "anthropic"
-
-    def test_provider_can_be_set_to_bedrock(self) -> None:
-        """LLMProviderConfig allows setting provider to bedrock."""
-        with patch.dict(os.environ, {"LLM_PROVIDER": "bedrock"}):
-            config = LLMProviderConfig()
             assert config.provider == "bedrock"
+
+    def test_provider_can_be_set_to_anthropic(self) -> None:
+        """LLMProviderConfig allows setting provider to anthropic."""
+        with patch.dict(os.environ, {"LLM_PROVIDER": "anthropic"}):
+            config = LLMProviderConfig()
+            assert config.provider == "anthropic"
 
     def test_default_bedrock_region(self) -> None:
         """LLMProviderConfig defaults bedrock_region to us-west-2."""
@@ -119,11 +119,12 @@ class TestLLMProviderConfig:
             config = LLMProviderConfig()
             assert config.bedrock_region == "us-east-1"
 
-    def test_default_bedrock_profile_is_none(self) -> None:
-        """LLMProviderConfig defaults bedrock_profile to None."""
-        with patch.dict(os.environ, {}, clear=True):
-            config = LLMProviderConfig()
-            assert config.bedrock_profile is None
+    def test_bedrock_profile_default_from_code(self) -> None:
+        """LLMProviderConfig code default for bedrock_profile is None."""
+        # Note: The default value is None, but .env files may override this
+        # This test verifies the model field default, not runtime behavior
+        fields = LLMProviderConfig.model_fields
+        assert fields["bedrock_profile"].default is None
 
     def test_bedrock_profile_from_environment(self) -> None:
         """LLMProviderConfig reads bedrock_profile from LLM_BEDROCK_PROFILE."""

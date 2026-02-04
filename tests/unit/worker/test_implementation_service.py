@@ -26,8 +26,8 @@ class TestImplementationService:
     """Test suite for ImplementationService."""
 
     @pytest.mark.asyncio
-    async def test_implement_changes_clones_repository(self) -> None:
-        """implement_changes clones the target repository."""
+    async def test_implement_changes_clones_feature_branch(self) -> None:
+        """implement_changes clones the feature branch (not target branch)."""
         # Mock RepoCloner
         mock_cloner = MagicMock(spec=RepoCloner)
         mock_cloner.clone_to_temp = AsyncMock(
@@ -63,11 +63,14 @@ class TestImplementationService:
             issue=issue,
             repo_owner="testowner",
             repo_name="testrepo",
-            branch_name="test-branch",
+            branch_name="feature/test-branch",
         )
 
-        # Verify clone_to_temp was called
-        mock_cloner.clone_to_temp.assert_called_once_with("testowner", "testrepo", None)
+        # Verify clone_to_temp was called with the FEATURE branch name (not target_branch)
+        # This ensures the implementation works on the pre-created feature branch
+        mock_cloner.clone_to_temp.assert_called_once_with(
+            "testowner", "testrepo", "feature/test-branch"
+        )
 
     @pytest.mark.asyncio
     async def test_implement_changes_cleans_up_repository(self) -> None:

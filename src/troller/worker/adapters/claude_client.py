@@ -8,9 +8,11 @@ import os
 from collections.abc import AsyncIterator
 from typing import Any
 
-from anthropic import Anthropic
+from anthropic import Anthropic, AnthropicBedrock
 from claude_agent_sdk import ClaudeAgentOptions, query as agent_query
 from pydantic import BaseModel
+
+from troller.config import config
 
 
 class ClaudeClient:
@@ -20,27 +22,41 @@ class ClaudeClient:
     - Agent SDK for codebase-aware queries with tool access
     - Messages API for structured output queries
 
-    Authenticates using Anthropic API key from environment.
+    Supports both Anthropic API and AWS Bedrock as providers.
+    Provider selection is controlled via config.llm_provider.provider.
     """
 
     def __init__(self, model: str | None = None) -> None:
-        """Initialize Claude client with API key authentication.
+        """Initialize Claude client with provider-specific authentication.
 
         Args:
             model: Optional default model to use for queries. If not specified,
                 queries will use the default model from structured_query.
 
         Raises:
-            ValueError: If ANTHROPIC_API_KEY environment variable is not set.
+            ValueError: If using Anthropic provider and ANTHROPIC_API_KEY is not set.
         """
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable is required")
-
-        # Store API key for agent options and direct API calls
-        self._api_key = api_key
-        self._anthropic_client = Anthropic(api_key=api_key)
+        self._provider = config.llm_provider.provider
         self._model = model
+
+        if self._provider == "bedrock":
+            # Configure Agent SDK for Bedrock
+            os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
+            if config.llm_provider.bedrock_region:
+                os.environ["AWS_REGION"] = config.llm_provider.bedrock_region
+
+            # Create Bedrock client for structured queries
+            self._anthropic_client: Anthropic | AnthropicBedrock = AnthropicBedrock(
+                aws_region=config.llm_provider.bedrock_region,
+            )
+            self._api_key: str | None = None  # Not needed for Bedrock
+        else:
+            # Anthropic provider
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                raise ValueError("ANTHROPIC_API_KEY environment variable is required")
+            self._api_key = api_key
+            self._anthropic_client = Anthropic(api_key=api_key)
 
     async def query(
         self, prompt: str, options: ClaudeAgentOptions
@@ -71,6 +87,37 @@ class ClaudeClient:
         """
         async for message in agent_query(prompt=prompt, options=options):
             yield message
+
+    def _get_effective_model(self, model: str | None) -> str:
+        """Get effective model ID, converting to Bedrock format if needed.
+
+        Args:
+            model: Optional model ID to use. Falls back to instance model or default.
+
+        Returns:
+            Model ID appropriate for the configured provider.
+        """
+        effective_model = model or self._model or "claude-sonnet-4-5-20250929"
+
+        if self._provider == "bedrock":
+            return self._to_bedrock_model_id(effective_model)
+        return effective_model
+
+    def _to_bedrock_model_id(self, model: str) -> str:
+        """Convert Anthropic model ID to Bedrock global model ID.
+
+        Args:
+            model: Anthropic-style model ID (e.g., 'claude-opus-4-5-20251101').
+
+        Returns:
+            Bedrock global model ID (e.g., 'global.anthropic.claude-opus-4-5-20251101-v1:0').
+        """
+        # Handle if already in Bedrock format
+        if model.startswith("anthropic.") or model.startswith("global."):
+            return model
+
+        # Convert: claude-opus-4-5-20251101 -> global.anthropic.claude-opus-4-5-20251101-v1:0
+        return f"global.anthropic.{model}-v1:0"
 
     async def structured_query(
         self,
@@ -107,8 +154,8 @@ class ClaudeClient:
             print(result.summary)
             ```
         """
-        # Use provided model, fallback to instance model, then to default
-        effective_model = model or self._model or "claude-sonnet-4-5-20250929"
+        # Get effective model with provider-specific formatting
+        effective_model = self._get_effective_model(model)
 
         # Use structured output to guarantee valid schema
         # Note: response_format is passed via extra_body for type compatibility

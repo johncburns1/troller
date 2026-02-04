@@ -36,7 +36,8 @@ class GitOperations:
             )
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
-                f"Failed to create branch {branch_name} from {base_branch}: {e.stderr}"
+                f"Failed to create branch {branch_name} from {base_branch}: "
+                f"stdout: {e.stdout}, stderr: {e.stderr}"
             ) from e
 
     async def commit_changes(
@@ -71,7 +72,21 @@ class GitOperations:
                     check=True,
                 )
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to stage changes: {e.stderr}") from e
+            raise RuntimeError(
+                f"Failed to stage changes: stdout: {e.stdout}, stderr: {e.stderr}"
+            ) from e
+
+        # Verify there are staged changes before attempting commit
+        result = subprocess.run(
+            ["git", "-C", repo_path, "diff", "--cached", "--quiet"],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            # returncode 0 means no diff = no staged changes
+            raise RuntimeError(
+                "No changes to commit after git add. "
+                "The implementation agent may not have made any file changes."
+            )
 
         # Commit staged changes
         try:
@@ -82,7 +97,9 @@ class GitOperations:
                 check=True,
             )
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to commit changes: {e.stderr}") from e
+            raise RuntimeError(
+                f"Failed to commit changes: stdout: {e.stdout}, stderr: {e.stderr}"
+            ) from e
 
     async def push_branch(
         self,
@@ -118,7 +135,8 @@ class GitOperations:
             )
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
-                f"Failed to push branch {branch_name}: {e.stderr}"
+                f"Failed to push branch {branch_name}: "
+                f"stdout: {e.stdout}, stderr: {e.stderr}"
             ) from e
 
     async def get_current_sha(self, repo_path: str) -> str:
@@ -142,4 +160,7 @@ class GitOperations:
             )
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to get current commit SHA: {e.stderr}") from e
+            raise RuntimeError(
+                f"Failed to get current commit SHA: "
+                f"stdout: {e.stdout}, stderr: {e.stderr}"
+            ) from e

@@ -93,7 +93,7 @@ class LLMProviderConfig(BaseSettings):
         extra="ignore",
     )
 
-    provider: Literal["anthropic", "bedrock"] = "anthropic"
+    provider: Literal["anthropic", "bedrock"] = "bedrock"
     bedrock_region: str = "us-west-2"
     bedrock_profile: str | None = None
 
