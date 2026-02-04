@@ -1,12 +1,12 @@
 ---
 name: feature-implementation
-description: Ralph Wiggum TDD loops - loads engineering standards, iterates with quality gates, commits, creates PR.
-allowed-tools: Task, TodoWrite, Bash(git status:*), Bash(git diff:*), Bash(git restore:*), Bash(uv:*), Bash(pytest:*), Bash(ruff:*), Bash(mypy:*), Skill(engineering:engineering-standards), Skill(engineering:python-engineering), Skill(ralph-loop:ralph-loop), Skill(commit-commands:commit), Skill(commit-commands:commit-push-pr), Read, Write, Edit
+description: TDD implementation with quality gates - loads standards, iterates until tests pass, commits changes.
+allowed-tools: Task, TodoWrite, Bash(git status:*), Bash(git diff:*), Bash(git restore:*), Bash(uv:*), Bash(pytest:*), Bash(ruff:*), Bash(mypy:*), Skill(engineering:engineering-standards), Skill(engineering:python-engineering), Skill(commit-commands:commit), Skill(commit-commands:commit-push-pr), Read, Write, Edit
 ---
 
 # Feature Implementation
 
-Ralph Wiggum iteration loops with TDD and quality gates.
+TDD-based implementation with iterative quality gates.
 
 ## Workflow
 
@@ -24,56 +24,55 @@ Trust the planning exploration - you have all the context you need.
 
 ### 2. Load Engineering Standards
 
-Load BEFORE Ralph Wiggum starts to prime TDD/architecture context:
+Load BEFORE implementation starts to prime TDD/architecture context:
 
 ```text
 Skill(engineering:engineering-standards)
 Skill(engineering:python-engineering)
 ```
 
-### 3. Run Ralph Loop
+### 3. Implement with TDD (Max 5 iterations)
 
-The Ralph Loop requires a task description from the plan. Format:
+Follow TDD approach with explicit iteration:
 
-```text
-Skill(ralph-loop:ralph-loop, args="[TASK_DESCRIPTION] --max-iterations 5 --completion-promise 'TASK COMPLETE'")
-```
+**For each iteration (max 5):**
 
-**Example:**
+1. **Write/update tests FIRST** (TDD principle)
+   - Create test file if needed
+   - Write failing tests for the feature
+   - Tests should cover the requirements from the plan
 
-```text
-Skill(ralph-loop:ralph-loop, args="Implement user authentication with JWT tokens --max-iterations 5 --completion-promise 'All tests passing'")
-```
+2. **Implement code to pass tests**
+   - Modify/create source files
+   - Follow hexagonal architecture patterns
+   - Keep changes focused on the task
 
-**IMPORTANT:** Replace `[TASK_DESCRIPTION]` with your feature implementation plan (from the planner).
+3. **Run quality checks:**
+   ```bash
+   uv run pytest
+   uv run ruff check --fix
+   uv run ruff format
+   uv run mypy src
+   ```
 
-**Arguments:**
+4. **Evaluate results:**
+   - ALL PASS → Exit loop, proceed to Step 4
+   - ANY FAIL → Analyze errors, fix, continue iteration
 
-- `[TASK_DESCRIPTION]` - Required: Clear description of what to implement
-- `--max-iterations N` - Optional: Max iterations (default: unlimited)
-- `--completion-promise 'TEXT'` - Optional: Exit phrase (must use quotes for multi-word)
+**Exit Conditions:**
+- All quality checks pass → Success, proceed to Final QA
+- Max iterations (5) reached → Document blockers, proceed with best effort
+- Same error 3+ times → Simplify approach or break into smaller tasks
 
-Ralph Loop iterates automatically:
+**Progress Tracking:**
+- Update TodoWrite after each iteration
+- Mark subtasks as completed when verified
+- One task in_progress at a time
 
-- Read code
-- Write tests first (TDD)
-- Implement to pass tests
-- Run quality checks: pytest, ruff, mypy
-- Fix issues
-- Repeat
-
-**Exit conditions:**
-
-- Max iterations reached
-- Completion promise detected in output
-- Early exit if all checks pass
-
-**Update TodoWrite as tasks complete.**
-
-**Troubleshooting loops:**
-
-- If stuck (same errors 2+ times): simplify approach
-- If max iterations reached: review assumptions, consider breaking down task
+**Troubleshooting:**
+- If stuck on same error: Check assumptions, read related code
+- If tests won't pass: Verify test logic first, then implementation
+- If type errors persist: Check imports and type annotations
 
 ### 4. Final QA
 
@@ -97,7 +96,9 @@ git diff                          # Check for unrelated changes
 git restore <unrelated-file>      # Clean up any unrelated files
 ```
 
-**Option A: Commit, push, and PR in one step**
+> **Note (Autonomous Mode):** When running via Troller's implementation service, skip committing - the service handles git operations after this skill completes. Just ensure changes are clean and tests pass.
+
+**Option A: Commit, push, and PR in one step** (interactive use)
 
 ```text
 Skill(commit-commands:commit-push-pr)
@@ -110,7 +111,7 @@ This will:
 - Push to origin
 - Create pull request
 
-**Option B: Just commit (if you want to review before pushing)**
+**Option B: Just commit** (interactive use)
 
 ```text
 Skill(commit-commands:commit)
@@ -137,6 +138,7 @@ Complete TodoWrite.
 
 | Issue | Fix |
 |-------|-----|
-| Ralph loop permission error | Ensure task description is provided in args |
-| Max iterations exceeded | Simplify or break into smaller tasks |
+| Tests failing repeatedly | Check test logic before implementation |
+| Type errors persist | Verify imports and annotations match |
+| Max iterations reached | Simplify task or document blockers |
 | Unrelated changes | `git restore <file>` |

@@ -166,7 +166,9 @@ class TestGitOperations:
             )
 
             git_ops = GitOperations()
-            with pytest.raises(RuntimeError, match="Failed to stage changes.*file not found"):
+            with pytest.raises(
+                RuntimeError, match="Failed to stage changes.*file not found"
+            ):
                 await git_ops.commit_changes(
                     repo_path="/tmp/test_repo",
                     message="Test commit",
@@ -188,7 +190,9 @@ class TestGitOperations:
             ]
 
             git_ops = GitOperations()
-            with pytest.raises(RuntimeError, match="Failed to commit changes.*nothing to commit"):
+            with pytest.raises(
+                RuntimeError, match="Failed to commit changes.*nothing to commit"
+            ):
                 await git_ops.commit_changes(
                     repo_path="/tmp/test_repo",
                     message="Test commit",
