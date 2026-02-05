@@ -20,6 +20,7 @@ from troller.worker.activities.github_activities import (
 )
 from troller.worker.activities.implementation_activities import run_implementation_agent
 from troller.worker.activities.planning_activities import run_planning_agent
+from troller.worker.activities.review_activities import run_review_agent
 from troller.worker.data_converter import pydantic_data_converter
 from troller.worker.workflows.issue_resolution import IssueResolutionWorkflow
 
@@ -58,6 +59,7 @@ async def run_worker(temporal_address: str, task_queue: str) -> None:
                 create_pull_request,
                 run_planning_agent,
                 run_implementation_agent,
+                run_review_agent,
             ],
         )
 

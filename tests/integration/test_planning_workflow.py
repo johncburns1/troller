@@ -12,6 +12,7 @@ from github.Issue import Issue as GithubIssue
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
+from troller.domain.models.commit import InternalReviewFeedback
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.activity_outputs import LLMMetadataOutput
 from troller.worker.activities.github_activities import (
@@ -21,6 +22,7 @@ from troller.worker.activities.github_activities import (
 )
 from troller.worker.activities.implementation_activities import run_implementation_agent
 from troller.worker.activities.planning_activities import run_planning_agent
+from troller.worker.activities.review_activities import run_review_agent
 from troller.worker.workflows.data_structures import (
     IssueResolutionWorkflowInput,
     IssueResolutionWorkflowOutput,
@@ -144,6 +146,9 @@ async def test_planning_workflow_end_to_end(
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             # Setup GitHub client mock
             mock_gh_client = MagicMock()
@@ -188,6 +193,30 @@ async def test_planning_workflow_end_to_end(
                 return_value=(commits, expected_llm_metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             pr = PullRequest(
                 number=1,
                 url="https://github.com/test-org/test-repo/pull/1",
@@ -210,6 +239,7 @@ async def test_planning_workflow_end_to_end(
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):
@@ -259,6 +289,9 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             # Setup mocks
             mock_gh_client = MagicMock()
@@ -332,6 +365,30 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
                 return_value=(commits, test_llm_metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             pr = PullRequest(
                 number=1,
                 url="https://github.com/test/test/pull/1",
@@ -354,6 +411,7 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):
@@ -402,6 +460,9 @@ async def test_planning_workflow_validates_step_structure() -> None:
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             # Setup mocks
             mock_gh_client = MagicMock()
@@ -476,6 +537,30 @@ async def test_planning_workflow_validates_step_structure() -> None:
                 return_value=(commits, test_llm_metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             pr = PullRequest(
                 number=1,
                 url="https://github.com/test/test/pull/1",
@@ -498,6 +583,7 @@ async def test_planning_workflow_validates_step_structure() -> None:
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):
@@ -545,6 +631,9 @@ async def test_planning_workflow_with_optional_fields() -> None:
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             # Setup mocks
             mock_gh_client = MagicMock()
@@ -620,6 +709,30 @@ async def test_planning_workflow_with_optional_fields() -> None:
                 return_value=(commits, test_llm_metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             pr = PullRequest(
                 number=1,
                 url="https://github.com/test/test/pull/1",
@@ -642,6 +755,7 @@ async def test_planning_workflow_with_optional_fields() -> None:
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):

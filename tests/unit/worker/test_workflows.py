@@ -12,6 +12,7 @@ from github.Issue import Issue as GithubIssue
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
+from troller.domain.models.commit import InternalReviewFeedback
 from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.activity_outputs import LLMMetadataOutput
 from troller.worker.activities.github_activities import (
@@ -24,6 +25,7 @@ from troller.worker.activities.planning_activities import (
     PlanningInput,
     run_planning_agent,
 )
+from troller.worker.activities.review_activities import run_review_agent
 from troller.worker.workflows.data_structures import (
     IssueResolutionWorkflowInput,
     IssueResolutionWorkflowOutput,
@@ -53,6 +55,9 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             # Setup GitHub mock
             mock_gh_client = MagicMock()
@@ -132,6 +137,30 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                 return_value=(commits, expected_metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             from troller.domain.models.pull_request import PullRequest
 
             pr = PullRequest(
@@ -156,6 +185,7 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):
@@ -202,6 +232,9 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             # Setup mocks
             from datetime import datetime
@@ -279,6 +312,30 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                 return_value=(commits, expected_metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             from troller.domain.models.pull_request import PullRequest
 
             pr = PullRequest(
@@ -303,6 +360,7 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):
@@ -351,6 +409,9 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             # Setup mocks
             from datetime import datetime
@@ -424,6 +485,30 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
                 return_value=(commits, expected_metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             from troller.domain.models.pull_request import PullRequest
 
             pr = PullRequest(
@@ -448,6 +533,7 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):
@@ -491,6 +577,9 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             # Setup mocks
             from datetime import datetime
@@ -568,6 +657,30 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                 return_value=(commits, expected_metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             from troller.domain.models.pull_request import PullRequest
 
             pr = PullRequest(
@@ -592,6 +705,7 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):
@@ -753,6 +867,9 @@ async def test_issue_resolution_workflow_full_flow_creates_branch_implements_and
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             from datetime import datetime
 
@@ -853,6 +970,30 @@ async def test_issue_resolution_workflow_full_flow_creates_branch_implements_and
                 return_value=(mock_commits, impl_metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             # Setup PR creation mock
             from troller.domain.models.pull_request import PullRequest
 
@@ -878,6 +1019,7 @@ async def test_issue_resolution_workflow_full_flow_creates_branch_implements_and
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):
@@ -940,6 +1082,9 @@ async def test_issue_resolution_workflow_output_includes_all_required_fields() -
             patch(
                 "troller.worker.activities.implementation_activities.ImplementationService"
             ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
         ):
             from datetime import datetime
 
@@ -1010,6 +1155,30 @@ async def test_issue_resolution_workflow_output_includes_all_required_fields() -
                 return_value=(commits, metadata)
             )
 
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
             from troller.domain.models.pull_request import PullRequest
 
             pr = PullRequest(
@@ -1034,6 +1203,7 @@ async def test_issue_resolution_workflow_output_includes_all_required_fields() -
                         run_planning_agent,
                         create_feature_branch,
                         run_implementation_agent,
+                        run_review_agent,
                         create_pull_request,
                     ],
                 ):
