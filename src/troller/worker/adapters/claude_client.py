@@ -6,6 +6,7 @@ Provides reusable methods for AI queries with codebase awareness and structured 
 
 import os
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any
 
 from anthropic import Anthropic, AnthropicBedrock
@@ -13,6 +14,23 @@ from claude_agent_sdk import ClaudeAgentOptions, query as agent_query
 from pydantic import BaseModel
 
 from troller.config import config
+
+
+@dataclass(frozen=True)
+class StructuredQueryResult[T]:
+    """Result from structured_query including usage information.
+
+    Attributes:
+        result: The validated Pydantic model result.
+        input_tokens: Number of input tokens used.
+        output_tokens: Number of output tokens generated.
+        model: The model that was used.
+    """
+
+    result: T
+    input_tokens: int
+    output_tokens: int
+    model: str
 
 
 class ClaudeClient:
@@ -119,13 +137,13 @@ class ClaudeClient:
         # Convert: claude-opus-4-5-20251101 -> global.anthropic.claude-opus-4-5-20251101-v1:0
         return f"global.anthropic.{model}-v1:0"
 
-    async def structured_query(
+    async def structured_query[T: BaseModel](
         self,
         prompt: str,
-        schema: type[BaseModel],
+        schema: type[T],
         model: str | None = None,
         token_limit: int = 4096,
-    ) -> BaseModel:
+    ) -> StructuredQueryResult[T]:
         """Query Claude with structured output guarantee.
 
         Uses Claude Messages API with JSON schema validation to ensure the response
@@ -139,7 +157,7 @@ class ClaudeClient:
             token_limit: Maximum tokens for the response (defaults to 4096).
 
         Returns:
-            Validated Pydantic model instance matching the schema.
+            StructuredQueryResult containing the validated result and usage info.
 
         Example:
             ```python
@@ -147,11 +165,12 @@ class ClaudeClient:
                 summary: str
                 findings: list[str]
 
-            result = await client.structured_query(
+            query_result = await client.structured_query(
                 "Analyze the architecture",
                 AnalysisResult
             )
-            print(result.summary)
+            print(query_result.result.summary)
+            print(f"Tokens used: {query_result.input_tokens}")
             ```
         """
         # Get effective model with provider-specific formatting
@@ -179,4 +198,11 @@ class ClaudeClient:
         # Extract text from first content block (guaranteed to be TextBlock for our request)
         first_content = response.content[0]
         response_text = first_content.text if hasattr(first_content, "text") else ""
-        return schema.model_validate_json(response_text)
+        result = schema.model_validate_json(response_text)
+
+        return StructuredQueryResult(
+            result=result,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            model=effective_model,
+        )

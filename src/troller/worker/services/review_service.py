@@ -17,7 +17,7 @@ from troller.domain.models.commit import Commit, InternalReviewFeedback
 from troller.domain.models.issue import Issue
 from troller.domain.models.plan import Plan
 from troller.worker.activities.activity_outputs import LLMMetadataOutput
-from troller.worker.adapters.claude_client import ClaudeClient
+from troller.worker.adapters.claude_client import ClaudeClient, StructuredQueryResult
 from troller.worker.adapters.repo_cloner import RepoCloner
 
 
@@ -58,7 +58,7 @@ class ReviewService:
         Args:
             claude_client: Claude API client for queries.
             repo_cloner: Repository cloner adapter for git operations.
-            model: Model name for LLM metadata tracking.
+            model: Model name to use for structured queries.
         """
         self._client = claude_client
         self._repo_cloner = repo_cloner
@@ -105,20 +105,20 @@ class ReviewService:
             )
 
             # Step 2: Execute review using structured query
-            feedback = await self._review(repo_path, commits, plan, issue)
+            feedback, query_result = await self._review(repo_path, commits, plan, issue)
 
             # Calculate duration
             duration_ms = int((time.monotonic() - start_time) * 1000)
 
-            # Create basic LLM metadata (structured query doesn't expose detailed usage)
+            # Create LLM metadata from structured query result
             llm_metadata = LLMMetadataOutput(
-                total_cost_usd=None,
-                input_tokens=None,
-                output_tokens=None,
+                total_cost_usd=None,  # Messages API doesn't provide cost
+                input_tokens=query_result.input_tokens,
+                output_tokens=query_result.output_tokens,
                 duration_ms=duration_ms,
                 duration_api_ms=duration_ms,
                 num_turns=1,
-                model=self._model,
+                model=query_result.model,
                 tools_used=[],
                 execution_flow="Structured review query",
             )
@@ -136,7 +136,7 @@ class ReviewService:
         commits: list[Commit],
         plan: Plan,
         issue: Issue,
-    ) -> InternalReviewFeedback:
+    ) -> tuple[InternalReviewFeedback, StructuredQueryResult[ReviewResponse]]:
         """Execute review using Claude structured query.
 
         Args:
@@ -146,26 +146,27 @@ class ReviewService:
             issue: GitHub issue being addressed.
 
         Returns:
-            InternalReviewFeedback domain object.
+            Tuple of (InternalReviewFeedback domain object, StructuredQueryResult).
         """
         # Build prompt for review
         prompt = self._build_review_prompt(commits, plan, issue)
 
         # Execute structured query for consistent response
-        # Cast result to ReviewResponse since we're passing it as the schema
-        response: ReviewResponse = await self._client.structured_query(  # type: ignore[assignment]
+        query_result = await self._client.structured_query(
             prompt=prompt,
             schema=ReviewResponse,
             model=self._model,
         )
 
         # Convert to domain model
-        return InternalReviewFeedback(
-            approved=response.approved,
-            comments=response.comments,
-            suggested_changes=response.suggested_changes,
+        feedback = InternalReviewFeedback(
+            approved=query_result.result.approved,
+            comments=query_result.result.comments,
+            suggested_changes=query_result.result.suggested_changes,
             timestamp=datetime.now(UTC),
         )
+
+        return feedback, query_result
 
     def _build_review_prompt(
         self,

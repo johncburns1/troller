@@ -7,14 +7,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from temporalio import activity
 
 from troller.config import config
-from troller.domain.models.commit import Commit
-from troller.domain.models.issue import Issue
-from troller.domain.models.plan import Plan, PlanStep
 from troller.worker.activities.activity_outputs import (
     CommitOutput,
     InternalReviewFeedbackOutput,
     LLMMetadataOutput,
     PlanOutput,
+)
+from troller.worker.activities.converters import (
+    commit_output_to_domain,
+    issue_from_activity_input,
+    plan_output_to_domain,
 )
 from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
@@ -93,39 +95,10 @@ async def run_review_agent(input: ReviewInput) -> ReviewActivityOutput:
         model=config.claude.review_model,
     )
 
-    # Convert CommitOutput DTOs to Commit domain models
-    commits = [
-        Commit(
-            sha=commit.sha,
-            message=commit.message,
-            timestamp=commit.timestamp,
-            internal_review_feedback=None,
-        )
-        for commit in input.commits
-    ]
-
-    # Convert PlanOutput DTO to Plan domain model
-    plan = Plan(
-        summary=input.plan.summary,
-        steps=[
-            PlanStep(
-                id=step.id,
-                description=step.description,
-                completed=step.completed,
-                related_files=step.related_files,
-                estimated_complexity=step.estimated_complexity,
-            )
-            for step in input.plan.steps
-        ],
-        created_at=input.plan.created_at,
-        technical_approach=input.plan.technical_approach,
-        testing_strategy=input.plan.testing_strategy,
-        metadata=input.plan.metadata,
-        based_on_commit=input.plan.based_on_commit,
-    )
-
-    # Convert issue primitives to Issue domain model
-    issue = Issue(
+    # Convert DTOs to domain models using shared converters
+    commits = [commit_output_to_domain(commit) for commit in input.commits]
+    plan = plan_output_to_domain(input.plan)
+    issue = issue_from_activity_input(
         number=input.issue_number,
         title=input.issue_title,
         description=input.issue_description,

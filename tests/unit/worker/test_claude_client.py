@@ -123,7 +123,7 @@ class TestClaudeClientAnthropicProvider:
 
     @pytest.mark.asyncio
     async def test_structured_query_returns_validated_model(self) -> None:
-        """structured_query() returns Pydantic model validated from response."""
+        """structured_query() returns StructuredQueryResult with validated Pydantic model."""
         with patch("troller.worker.adapters.claude_client.config") as mock_config:
             mock_config.llm_provider.provider = "anthropic"
             with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
@@ -142,17 +142,22 @@ class TestClaudeClientAnthropicProvider:
                     mock_response.content = [
                         MagicMock(text='{"summary": "Test summary", "count": 42}')
                     ]
+                    mock_response.usage.input_tokens = 100
+                    mock_response.usage.output_tokens = 50
                     mock_anthropic.messages.create.return_value = mock_response
 
                     client = ClaudeClient()
-                    result = await client.structured_query(
+                    query_result = await client.structured_query(
                         "Generate test data", TestSchema
                     )
 
-                    # Verify result is validated Pydantic model
-                    assert isinstance(result, TestSchema)
-                    assert result.summary == "Test summary"
-                    assert result.count == 42
+                    # Verify result contains validated Pydantic model and usage info
+                    assert isinstance(query_result.result, TestSchema)
+                    assert query_result.result.summary == "Test summary"
+                    assert query_result.result.count == 42
+                    assert query_result.input_tokens == 100
+                    assert query_result.output_tokens == 50
+                    assert query_result.model == "claude-sonnet-4-5-20250929"
 
     @pytest.mark.asyncio
     async def test_structured_query_uses_json_schema(self) -> None:

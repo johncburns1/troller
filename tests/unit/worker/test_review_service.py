@@ -9,9 +9,31 @@ import pytest
 from troller.domain.models.commit import Commit, InternalReviewFeedback
 from troller.domain.models.issue import Issue
 from troller.domain.models.plan import Plan, PlanStep
-from troller.worker.adapters.claude_client import ClaudeClient
+from troller.worker.adapters.claude_client import ClaudeClient, StructuredQueryResult
 from troller.worker.adapters.repo_cloner import RepoCloner
-from troller.worker.services.review_service import ReviewService
+from troller.worker.services.review_service import ReviewResponse, ReviewService
+
+
+def make_structured_query_result(
+    approved: bool,
+    comments: list[str] | None = None,
+    suggested_changes: list[str] | None = None,
+    input_tokens: int = 100,
+    output_tokens: int = 50,
+    model: str = "test-model",
+) -> StructuredQueryResult[ReviewResponse]:
+    """Create a mock StructuredQueryResult for tests."""
+    response = ReviewResponse(
+        approved=approved,
+        comments=comments or [],
+        suggested_changes=suggested_changes or [],
+    )
+    return StructuredQueryResult(
+        result=response,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        model=model,
+    )
 
 
 class MockResultMessage:
@@ -37,11 +59,7 @@ class TestReviewService:
         # Mock Claude client - returns approval
         mock_client = MagicMock(spec=ClaudeClient)
         mock_client.structured_query = AsyncMock(
-            return_value=MagicMock(
-                approved=True,
-                comments=[],
-                suggested_changes=[],
-            )
+            return_value=make_structured_query_result(approved=True)
         )
 
         service = ReviewService(mock_client, mock_cloner)
@@ -85,11 +103,7 @@ class TestReviewService:
         # Mock Claude client - returns approval
         mock_client = MagicMock(spec=ClaudeClient)
         mock_client.structured_query = AsyncMock(
-            return_value=MagicMock(
-                approved=True,
-                comments=[],
-                suggested_changes=[],
-            )
+            return_value=make_structured_query_result(approved=True)
         )
 
         service = ReviewService(mock_client, mock_cloner)
@@ -172,10 +186,9 @@ class TestReviewService:
         # Mock Claude client - returns approval with comments
         mock_client = MagicMock(spec=ClaudeClient)
         mock_client.structured_query = AsyncMock(
-            return_value=MagicMock(
+            return_value=make_structured_query_result(
                 approved=True,
                 comments=["Code looks good", "Well tested"],
-                suggested_changes=[],
             )
         )
 
@@ -219,7 +232,7 @@ class TestReviewService:
         # Mock Claude client - returns rejection with changes
         mock_client = MagicMock(spec=ClaudeClient)
         mock_client.structured_query = AsyncMock(
-            return_value=MagicMock(
+            return_value=make_structured_query_result(
                 approved=False,
                 comments=["Missing test coverage", "Code style issues"],
                 suggested_changes=[
@@ -272,7 +285,7 @@ class TestReviewService:
 
         async def capture_prompt(prompt: str, schema: type, model: str | None = None):
             captured_prompts.append(prompt)
-            return MagicMock(approved=True, comments=[], suggested_changes=[])
+            return make_structured_query_result(approved=True)
 
         mock_client.structured_query = capture_prompt
 
@@ -330,7 +343,7 @@ class TestReviewService:
 
         async def capture_prompt(prompt: str, schema: type, model: str | None = None):
             captured_prompts.append(prompt)
-            return MagicMock(approved=True, comments=[], suggested_changes=[])
+            return make_structured_query_result(approved=True)
 
         mock_client.structured_query = capture_prompt
 
@@ -382,10 +395,11 @@ class TestReviewService:
         # Mock Claude client
         mock_client = MagicMock(spec=ClaudeClient)
         mock_client.structured_query = AsyncMock(
-            return_value=MagicMock(
+            return_value=make_structured_query_result(
                 approved=True,
-                comments=[],
-                suggested_changes=[],
+                input_tokens=200,
+                output_tokens=75,
+                model="claude-sonnet-4-5",
             )
         )
 
@@ -413,4 +427,7 @@ class TestReviewService:
         # Verify metadata structure
         assert llm_metadata is not None
         assert llm_metadata.duration_ms >= 0
-        assert llm_metadata.num_turns >= 0
+        assert llm_metadata.num_turns == 1
+        assert llm_metadata.input_tokens == 200
+        assert llm_metadata.output_tokens == 75
+        assert llm_metadata.model == "claude-sonnet-4-5"
