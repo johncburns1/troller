@@ -93,3 +93,36 @@ class GitHubClient:
             created_at=github_pr.created_at,
             state=state,  # type: ignore[arg-type]
         )
+
+    def get_pull_request(self, owner: str, repo: str, pr_number: int) -> PullRequest:
+        """Fetch a pull request by repository and PR number.
+
+        Args:
+            owner: Repository owner (user or organization).
+            repo: Repository name.
+            pr_number: Pull request number to fetch.
+
+        Returns:
+            Domain PullRequest model with PR details including merge status.
+        """
+        repository = self._client.get_repo(f"{owner}/{repo}")
+        github_pr = repository.get_pull(pr_number)
+
+        # Determine the actual state - PyGithub returns "closed" for merged PRs
+        # Check the merged flag to distinguish merged from closed
+        if github_pr.merged:
+            state = "merged"
+        elif github_pr.state == "closed":
+            state = "closed"
+        else:
+            state = "open"
+
+        return PullRequest(
+            number=github_pr.number,
+            url=github_pr.html_url,
+            head_branch=github_pr.head.ref,
+            base_branch=github_pr.base.ref,
+            head_sha=github_pr.head.sha,
+            created_at=github_pr.created_at,
+            state=state,  # type: ignore[arg-type]
+        )

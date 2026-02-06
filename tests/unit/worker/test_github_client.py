@@ -215,3 +215,126 @@ class TestGitHubClient:
 
                 # Verify correct repo path
                 mock_github.get_repo.assert_called_once_with("test-owner/test-repo")
+
+    def test_get_pull_request_fetches_pr_and_returns_domain_model(self) -> None:
+        """get_pull_request fetches PR from GitHub and returns domain PullRequest."""
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with patch(
+                "troller.worker.adapters.github_client.Github"
+            ) as mock_github_class:
+                # Setup mocks
+                mock_github = MagicMock()
+                mock_github_class.return_value = mock_github
+
+                mock_repo = MagicMock()
+                mock_github.get_repo.return_value = mock_repo
+
+                # Mock the pull request
+                mock_pr = MagicMock()
+                mock_pr.number = 42
+                mock_pr.html_url = "https://github.com/owner/repo/pull/42"
+                mock_pr.head.ref = "feature/test"
+                mock_pr.base.ref = "main"
+                mock_pr.head.sha = "abc123def456"
+                mock_pr.created_at = datetime(2024, 1, 1, 12, 0, 0)
+                mock_pr.state = "open"
+                mock_pr.merged = False
+                mock_pr.merged_at = None
+                mock_pr.merged_by = None
+                mock_repo.get_pull.return_value = mock_pr
+
+                # Test
+                client = GitHubClient()
+                result = client.get_pull_request(
+                    owner="owner",
+                    repo="repo",
+                    pr_number=42,
+                )
+
+                # Verify get_pull was called correctly
+                mock_repo.get_pull.assert_called_once_with(42)
+
+                # Verify domain model returned
+                assert isinstance(result, PullRequest)
+                assert result.number == 42
+                assert result.url == "https://github.com/owner/repo/pull/42"
+                assert result.head_branch == "feature/test"
+                assert result.base_branch == "main"
+                assert result.head_sha == "abc123def456"
+                assert result.state == "open"
+
+    def test_get_pull_request_returns_merged_state_when_merged(self) -> None:
+        """get_pull_request returns 'merged' state when PR is merged."""
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with patch(
+                "troller.worker.adapters.github_client.Github"
+            ) as mock_github_class:
+                # Setup mocks
+                mock_github = MagicMock()
+                mock_github_class.return_value = mock_github
+
+                mock_repo = MagicMock()
+                mock_github.get_repo.return_value = mock_repo
+
+                # Mock merged PR - PyGithub sets state to "closed" when merged
+                mock_pr = MagicMock()
+                mock_pr.number = 42
+                mock_pr.html_url = "https://github.com/owner/repo/pull/42"
+                mock_pr.head.ref = "feature/test"
+                mock_pr.base.ref = "main"
+                mock_pr.head.sha = "abc123"
+                mock_pr.created_at = datetime(2024, 1, 1, 12, 0, 0)
+                mock_pr.state = "closed"
+                mock_pr.merged = True
+                mock_pr.merged_at = datetime(2024, 1, 2, 12, 0, 0)
+                mock_pr.merged_by.login = "reviewer"
+                mock_repo.get_pull.return_value = mock_pr
+
+                # Test
+                client = GitHubClient()
+                result = client.get_pull_request(
+                    owner="owner",
+                    repo="repo",
+                    pr_number=42,
+                )
+
+                # Verify merged state
+                assert result.state == "merged"
+
+    def test_get_pull_request_returns_closed_state_when_closed_not_merged(self) -> None:
+        """get_pull_request returns 'closed' state when PR is closed but not merged."""
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with patch(
+                "troller.worker.adapters.github_client.Github"
+            ) as mock_github_class:
+                # Setup mocks
+                mock_github = MagicMock()
+                mock_github_class.return_value = mock_github
+
+                mock_repo = MagicMock()
+                mock_github.get_repo.return_value = mock_repo
+
+                # Mock closed PR (not merged)
+                mock_pr = MagicMock()
+                mock_pr.number = 42
+                mock_pr.html_url = "https://github.com/owner/repo/pull/42"
+                mock_pr.head.ref = "feature/test"
+                mock_pr.base.ref = "main"
+                mock_pr.head.sha = "abc123"
+                mock_pr.created_at = datetime(2024, 1, 1, 12, 0, 0)
+                mock_pr.state = "closed"
+                mock_pr.merged = False
+                mock_pr.merged_at = None
+                mock_pr.merged_by = None
+                mock_repo.get_pull.return_value = mock_pr
+
+                # Test
+                client = GitHubClient()
+                result = client.get_pull_request(
+                    owner="owner",
+                    repo="repo",
+                    pr_number=42,
+                )
+
+                # Verify closed state
+                assert result.state == "closed"

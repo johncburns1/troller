@@ -20,6 +20,7 @@ from troller.worker.activities.github_activities import (
     FetchIssueOutput,
     create_pull_request,
     fetch_issue,
+    fetch_pull_request,
 )
 from troller.worker.activities.planning_activities import (
     PlanningInput,
@@ -174,6 +175,18 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
             )
             mock_gh_client.create_pull_request.return_value = pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=1,
+                url="https://github.com/test-owner/test-repo/pull/1",
+                head_branch="troller/issue-123",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -187,6 +200,7 @@ async def test_issue_resolution_workflow_executes_activities_in_correct_order() 
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     # Execute workflow
@@ -349,6 +363,18 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
             )
             mock_gh_client.create_pull_request.return_value = pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=1,
+                url="https://github.com/test-owner/test-repo/pull/1",
+                head_branch="troller/issue-456",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -362,6 +388,7 @@ async def test_issue_resolution_workflow_returns_plan_with_steps() -> None:
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     input_data = IssueResolutionWorkflowInput(
@@ -522,6 +549,18 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
             )
             mock_gh_client.create_pull_request.return_value = pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=1,
+                url="https://github.com/test-owner/test-repo/pull/1",
+                head_branch="troller/issue-789",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -535,6 +574,7 @@ async def test_issue_resolution_workflow_stores_issue_in_state() -> None:
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     input_data = IssueResolutionWorkflowInput(
@@ -694,6 +734,18 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
             )
             mock_gh_client.create_pull_request.return_value = pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=1,
+                url="https://github.com/test-owner/test-repo/pull/1",
+                head_branch="troller/issue-101",
+                base_branch="develop",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -707,6 +759,7 @@ async def test_issue_resolution_workflow_accepts_optional_target_branch() -> Non
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     # Test with target_branch
@@ -1008,6 +1061,18 @@ async def test_issue_resolution_workflow_full_flow_creates_branch_implements_and
             )
             mock_gh_client.create_pull_request.return_value = mock_pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=42,
+                url="https://github.com/test-owner/test-repo/pull/42",
+                head_branch="troller/issue-36",
+                base_branch="main",
+                head_sha="commit-sha-2",
+                created_at=datetime.now(),
+                state="merged",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -1021,6 +1086,7 @@ async def test_issue_resolution_workflow_full_flow_creates_branch_implements_and
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     input_data = IssueResolutionWorkflowInput(
@@ -1192,6 +1258,18 @@ async def test_issue_resolution_workflow_output_includes_all_required_fields() -
             )
             mock_gh_client.create_pull_request.return_value = pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=1,
+                url="https://github.com/o/r/pull/1",
+                head_branch="troller/issue-1",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Run test
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -1205,6 +1283,7 @@ async def test_issue_resolution_workflow_output_includes_all_required_fields() -
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     input_data = IssueResolutionWorkflowInput(
@@ -1231,3 +1310,561 @@ async def test_issue_resolution_workflow_output_includes_all_required_fields() -
                     assert isinstance(result.commits, list)
                     assert len(result.commits) > 0
                     assert result.pull_request is not None
+
+
+@pytest.mark.asyncio
+async def test_workflow_detects_merged_pr_and_returns_merged_state() -> None:
+    """Test workflow polls PR status and returns merged state when PR is merged."""
+    with patch.dict(
+        os.environ, {"GITHUB_TOKEN": "test-token", "ANTHROPIC_API_KEY": "test-key"}
+    ):
+        with (
+            patch(
+                "troller.worker.activities.github_activities.GitHubClient"
+            ) as mock_gh_client_class,
+            patch(
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_planning_service_class,
+            patch(
+                "troller.worker.activities.github_activities.RepoCloner"
+            ) as mock_cloner_class,
+            patch(
+                "troller.worker.activities.github_activities.GitOperations"
+            ) as mock_git_ops_class,
+            patch(
+                "troller.worker.activities.implementation_activities.ImplementationService"
+            ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
+        ):
+            from datetime import datetime
+
+            from troller.worker.activities.activity_outputs import CommitOutput
+            from troller.worker.activities.github_activities import (
+                create_feature_branch,
+            )
+            from troller.worker.activities.implementation_activities import (
+                run_implementation_agent,
+            )
+
+            # Setup GitHub mock
+            mock_gh_client = MagicMock()
+            mock_gh_client_class.return_value = mock_gh_client
+            mock_github_issue = MagicMock(spec=GithubIssue)
+            mock_github_issue.number = 10
+            mock_github_issue.title = "Test merged PR"
+            mock_github_issue.body = "Test description"
+            mock_github_issue.labels = []
+            mock_github_issue.html_url = (
+                "https://github.com/test-owner/test-repo/issues/10"
+            )
+            mock_gh_client.get_issue.return_value = mock_github_issue
+
+            # Setup planning mock
+            mock_planning_service = MagicMock()
+            mock_planning_service_class.return_value = mock_planning_service
+            expected_plan = Plan(
+                summary="Implementation plan",
+                steps=[
+                    PlanStep(id="step-1", description="Step 1", completed=False),
+                ],
+                created_at=datetime.now(),
+                metadata={"issue_number": 10},
+            )
+            expected_metadata = LLMMetadataOutput(
+                total_cost_usd=0.10,
+                input_tokens=800,
+                output_tokens=400,
+                duration_ms=4000,
+                duration_api_ms=3500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read"],
+                execution_flow="Invoked feature-planner skill",
+            )
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_metadata)
+            )
+
+            # Setup git mocks
+            mock_cloner = MagicMock()
+            mock_cloner_class.return_value = mock_cloner
+            mock_git_ops = MagicMock()
+            mock_git_ops_class.return_value = mock_git_ops
+            mock_cloner.clone_to_temp = AsyncMock(
+                return_value=(Path("/tmp/t"), Path("/tmp/t/r"), "sha")
+            )
+            mock_git_ops.create_branch = AsyncMock()
+            mock_git_ops.push_branch = AsyncMock()
+            mock_git_ops.get_current_sha = AsyncMock(return_value="branch-sha")
+
+            # Setup implementation mock
+            mock_impl_service = MagicMock()
+            mock_impl_service_class.return_value = mock_impl_service
+            commits = [
+                CommitOutput(
+                    sha="commit-1",
+                    message="Commit",
+                    timestamp=datetime.now(),
+                    internal_review_feedback=None,
+                )
+            ]
+            mock_impl_service.implement_changes = AsyncMock(
+                return_value=(commits, expected_metadata)
+            )
+
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
+            # Setup PR creation mock
+            from troller.domain.models.pull_request import PullRequest
+
+            pr = PullRequest(
+                number=42,
+                url="https://github.com/test-owner/test-repo/pull/42",
+                head_branch="troller/issue-10",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="open",
+            )
+            mock_gh_client.create_pull_request.return_value = pr
+
+            # Setup get_pull_request mock - return merged after first poll
+            merged_pr = PullRequest(
+                number=42,
+                url="https://github.com/test-owner/test-repo/pull/42",
+                head_branch="troller/issue-10",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
+            # Run test with time-skipping environment
+            async with await WorkflowEnvironment.start_time_skipping() as env:
+                async with Worker(
+                    env.client,
+                    task_queue="test-queue",
+                    workflows=[IssueResolutionWorkflow],
+                    activities=[
+                        fetch_issue,
+                        run_planning_agent,
+                        create_feature_branch,
+                        run_implementation_agent,
+                        run_review_agent,
+                        create_pull_request,
+                        fetch_pull_request,
+                    ],
+                ):
+                    input_data = IssueResolutionWorkflowInput(
+                        repo_owner="test-owner",
+                        repo_name="test-repo",
+                        issue_number=10,
+                        target_branch="main",
+                    )
+
+                    result = await env.client.execute_workflow(
+                        IssueResolutionWorkflow.run,
+                        input_data,
+                        id="test-workflow-merged",
+                        task_queue="test-queue",
+                    )
+
+                    # Verify workflow detected merged state
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.final_state == "merged"
+
+
+@pytest.mark.asyncio
+async def test_workflow_detects_closed_pr_and_returns_closed_state() -> None:
+    """Test workflow polls PR status and returns closed state when PR is closed."""
+    with patch.dict(
+        os.environ, {"GITHUB_TOKEN": "test-token", "ANTHROPIC_API_KEY": "test-key"}
+    ):
+        with (
+            patch(
+                "troller.worker.activities.github_activities.GitHubClient"
+            ) as mock_gh_client_class,
+            patch(
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_planning_service_class,
+            patch(
+                "troller.worker.activities.github_activities.RepoCloner"
+            ) as mock_cloner_class,
+            patch(
+                "troller.worker.activities.github_activities.GitOperations"
+            ) as mock_git_ops_class,
+            patch(
+                "troller.worker.activities.implementation_activities.ImplementationService"
+            ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
+        ):
+            from datetime import datetime
+
+            from troller.worker.activities.activity_outputs import CommitOutput
+            from troller.worker.activities.github_activities import (
+                create_feature_branch,
+            )
+            from troller.worker.activities.implementation_activities import (
+                run_implementation_agent,
+            )
+
+            # Setup GitHub mock
+            mock_gh_client = MagicMock()
+            mock_gh_client_class.return_value = mock_gh_client
+            mock_github_issue = MagicMock(spec=GithubIssue)
+            mock_github_issue.number = 11
+            mock_github_issue.title = "Test closed PR"
+            mock_github_issue.body = "Test description"
+            mock_github_issue.labels = []
+            mock_github_issue.html_url = (
+                "https://github.com/test-owner/test-repo/issues/11"
+            )
+            mock_gh_client.get_issue.return_value = mock_github_issue
+
+            # Setup planning mock
+            mock_planning_service = MagicMock()
+            mock_planning_service_class.return_value = mock_planning_service
+            expected_plan = Plan(
+                summary="Implementation plan",
+                steps=[
+                    PlanStep(id="step-1", description="Step 1", completed=False),
+                ],
+                created_at=datetime.now(),
+                metadata={"issue_number": 11},
+            )
+            expected_metadata = LLMMetadataOutput(
+                total_cost_usd=0.10,
+                input_tokens=800,
+                output_tokens=400,
+                duration_ms=4000,
+                duration_api_ms=3500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read"],
+                execution_flow="Invoked feature-planner skill",
+            )
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_metadata)
+            )
+
+            # Setup git mocks
+            mock_cloner = MagicMock()
+            mock_cloner_class.return_value = mock_cloner
+            mock_git_ops = MagicMock()
+            mock_git_ops_class.return_value = mock_git_ops
+            mock_cloner.clone_to_temp = AsyncMock(
+                return_value=(Path("/tmp/t"), Path("/tmp/t/r"), "sha")
+            )
+            mock_git_ops.create_branch = AsyncMock()
+            mock_git_ops.push_branch = AsyncMock()
+            mock_git_ops.get_current_sha = AsyncMock(return_value="branch-sha")
+
+            # Setup implementation mock
+            mock_impl_service = MagicMock()
+            mock_impl_service_class.return_value = mock_impl_service
+            commits = [
+                CommitOutput(
+                    sha="commit-1",
+                    message="Commit",
+                    timestamp=datetime.now(),
+                    internal_review_feedback=None,
+                )
+            ]
+            mock_impl_service.implement_changes = AsyncMock(
+                return_value=(commits, expected_metadata)
+            )
+
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
+            # Setup PR creation mock
+            from troller.domain.models.pull_request import PullRequest
+
+            pr = PullRequest(
+                number=43,
+                url="https://github.com/test-owner/test-repo/pull/43",
+                head_branch="troller/issue-11",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="open",
+            )
+            mock_gh_client.create_pull_request.return_value = pr
+
+            # Setup get_pull_request mock - return closed after first poll
+            closed_pr = PullRequest(
+                number=43,
+                url="https://github.com/test-owner/test-repo/pull/43",
+                head_branch="troller/issue-11",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="closed",
+            )
+            mock_gh_client.get_pull_request.return_value = closed_pr
+
+            # Run test
+            async with await WorkflowEnvironment.start_time_skipping() as env:
+                async with Worker(
+                    env.client,
+                    task_queue="test-queue",
+                    workflows=[IssueResolutionWorkflow],
+                    activities=[
+                        fetch_issue,
+                        run_planning_agent,
+                        create_feature_branch,
+                        run_implementation_agent,
+                        run_review_agent,
+                        create_pull_request,
+                        fetch_pull_request,
+                    ],
+                ):
+                    input_data = IssueResolutionWorkflowInput(
+                        repo_owner="test-owner",
+                        repo_name="test-repo",
+                        issue_number=11,
+                        target_branch="main",
+                    )
+
+                    result = await env.client.execute_workflow(
+                        IssueResolutionWorkflow.run,
+                        input_data,
+                        id="test-workflow-closed",
+                        task_queue="test-queue",
+                    )
+
+                    # Verify workflow detected closed state
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.final_state == "closed"
+
+
+@pytest.mark.asyncio
+async def test_workflow_returns_timeout_when_pr_stays_open() -> None:
+    """Test workflow returns timeout state when PR stays open past max wait."""
+    with patch.dict(
+        os.environ, {"GITHUB_TOKEN": "test-token", "ANTHROPIC_API_KEY": "test-key"}
+    ):
+        with (
+            patch(
+                "troller.worker.activities.github_activities.GitHubClient"
+            ) as mock_gh_client_class,
+            patch(
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_planning_service_class,
+            patch(
+                "troller.worker.activities.github_activities.RepoCloner"
+            ) as mock_cloner_class,
+            patch(
+                "troller.worker.activities.github_activities.GitOperations"
+            ) as mock_git_ops_class,
+            patch(
+                "troller.worker.activities.implementation_activities.ImplementationService"
+            ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
+            patch.object(
+                IssueResolutionWorkflow, "MAX_WAIT_HOURS", 0
+            ),  # Set to 0 for instant timeout
+            patch.object(
+                IssueResolutionWorkflow, "POLL_INTERVAL_SECONDS", 1
+            ),  # Short poll interval
+        ):
+            from datetime import datetime
+
+            from troller.worker.activities.activity_outputs import CommitOutput
+            from troller.worker.activities.github_activities import (
+                create_feature_branch,
+            )
+            from troller.worker.activities.implementation_activities import (
+                run_implementation_agent,
+            )
+
+            # Setup GitHub mock
+            mock_gh_client = MagicMock()
+            mock_gh_client_class.return_value = mock_gh_client
+            mock_github_issue = MagicMock(spec=GithubIssue)
+            mock_github_issue.number = 12
+            mock_github_issue.title = "Test timeout PR"
+            mock_github_issue.body = "Test description"
+            mock_github_issue.labels = []
+            mock_github_issue.html_url = (
+                "https://github.com/test-owner/test-repo/issues/12"
+            )
+            mock_gh_client.get_issue.return_value = mock_github_issue
+
+            # Setup planning mock
+            mock_planning_service = MagicMock()
+            mock_planning_service_class.return_value = mock_planning_service
+            expected_plan = Plan(
+                summary="Implementation plan",
+                steps=[
+                    PlanStep(id="step-1", description="Step 1", completed=False),
+                ],
+                created_at=datetime.now(),
+                metadata={"issue_number": 12},
+            )
+            expected_metadata = LLMMetadataOutput(
+                total_cost_usd=0.10,
+                input_tokens=800,
+                output_tokens=400,
+                duration_ms=4000,
+                duration_api_ms=3500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read"],
+                execution_flow="Invoked feature-planner skill",
+            )
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_metadata)
+            )
+
+            # Setup git mocks
+            mock_cloner = MagicMock()
+            mock_cloner_class.return_value = mock_cloner
+            mock_git_ops = MagicMock()
+            mock_git_ops_class.return_value = mock_git_ops
+            mock_cloner.clone_to_temp = AsyncMock(
+                return_value=(Path("/tmp/t"), Path("/tmp/t/r"), "sha")
+            )
+            mock_git_ops.create_branch = AsyncMock()
+            mock_git_ops.push_branch = AsyncMock()
+            mock_git_ops.get_current_sha = AsyncMock(return_value="branch-sha")
+
+            # Setup implementation mock
+            mock_impl_service = MagicMock()
+            mock_impl_service_class.return_value = mock_impl_service
+            commits = [
+                CommitOutput(
+                    sha="commit-1",
+                    message="Commit",
+                    timestamp=datetime.now(),
+                    internal_review_feedback=None,
+                )
+            ]
+            mock_impl_service.implement_changes = AsyncMock(
+                return_value=(commits, expected_metadata)
+            )
+
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
+            # Setup PR creation mock
+            from troller.domain.models.pull_request import PullRequest
+
+            pr = PullRequest(
+                number=44,
+                url="https://github.com/test-owner/test-repo/pull/44",
+                head_branch="troller/issue-12",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="open",
+            )
+            mock_gh_client.create_pull_request.return_value = pr
+
+            # PR stays open (never merged/closed)
+            mock_gh_client.get_pull_request.return_value = pr
+
+            # Run test
+            async with await WorkflowEnvironment.start_time_skipping() as env:
+                async with Worker(
+                    env.client,
+                    task_queue="test-queue",
+                    workflows=[IssueResolutionWorkflow],
+                    activities=[
+                        fetch_issue,
+                        run_planning_agent,
+                        create_feature_branch,
+                        run_implementation_agent,
+                        run_review_agent,
+                        create_pull_request,
+                        fetch_pull_request,
+                    ],
+                ):
+                    input_data = IssueResolutionWorkflowInput(
+                        repo_owner="test-owner",
+                        repo_name="test-repo",
+                        issue_number=12,
+                        target_branch="main",
+                    )
+
+                    result = await env.client.execute_workflow(
+                        IssueResolutionWorkflow.run,
+                        input_data,
+                        id="test-workflow-timeout",
+                        task_queue="test-queue",
+                    )
+
+                    # Verify workflow returned timeout state
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.final_state == "timeout"
