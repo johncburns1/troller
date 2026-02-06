@@ -17,9 +17,12 @@ from troller.worker.activities.github_activities import (
     CreatePullRequestOutput,
     FetchIssueInput,
     FetchIssueOutput,
+    FetchPullRequestInput,
+    FetchPullRequestOutput,
     create_feature_branch,
     create_pull_request,
     fetch_issue,
+    fetch_pull_request,
 )
 
 
@@ -546,3 +549,198 @@ class TestCreateFeatureBranch:
             assert result.branch_name == "troller/issue-36"
             assert result.head_sha == "abc123def456789"
             assert len(result.head_sha) > 0
+
+
+class TestFetchPullRequestInput:
+    """Test suite for FetchPullRequestInput model."""
+
+    def test_fetch_pull_request_input_accepts_valid_data(self) -> None:
+        """FetchPullRequestInput accepts valid repository and PR number."""
+        input_data = FetchPullRequestInput(
+            repo_owner="test-owner",
+            repo_name="test-repo",
+            pr_number=42,
+        )
+
+        assert input_data.repo_owner == "test-owner"
+        assert input_data.repo_name == "test-repo"
+        assert input_data.pr_number == 42
+
+    def test_fetch_pull_request_input_is_frozen(self) -> None:
+        """FetchPullRequestInput is immutable (frozen)."""
+        input_data = FetchPullRequestInput(
+            repo_owner="owner",
+            repo_name="repo",
+            pr_number=1,
+        )
+
+        with pytest.raises(Exception):  # Pydantic raises ValidationError on frozen
+            input_data.pr_number = 2  # type: ignore
+
+
+class TestFetchPullRequestOutput:
+    """Test suite for FetchPullRequestOutput model."""
+
+    def test_fetch_pull_request_output_accepts_valid_data(self) -> None:
+        """FetchPullRequestOutput accepts valid PR data."""
+        output_data = FetchPullRequestOutput(
+            number=42,
+            url="https://github.com/owner/repo/pull/42",
+            state="open",
+            merged_at=None,
+            merged_by=None,
+        )
+
+        assert output_data.number == 42
+        assert output_data.url == "https://github.com/owner/repo/pull/42"
+        assert output_data.state == "open"
+        assert output_data.merged_at is None
+        assert output_data.merged_by is None
+
+    def test_fetch_pull_request_output_accepts_merged_data(self) -> None:
+        """FetchPullRequestOutput accepts merged PR data."""
+        output_data = FetchPullRequestOutput(
+            number=42,
+            url="https://github.com/owner/repo/pull/42",
+            state="merged",
+            merged_at="2024-01-02T12:00:00",
+            merged_by="reviewer",
+        )
+
+        assert output_data.state == "merged"
+        assert output_data.merged_at == "2024-01-02T12:00:00"
+        assert output_data.merged_by == "reviewer"
+
+    def test_fetch_pull_request_output_is_frozen(self) -> None:
+        """FetchPullRequestOutput is immutable (frozen)."""
+        output_data = FetchPullRequestOutput(
+            number=42,
+            url="https://github.com/owner/repo/pull/42",
+            state="open",
+            merged_at=None,
+            merged_by=None,
+        )
+
+        with pytest.raises(Exception):
+            output_data.state = "merged"  # type: ignore
+
+
+class TestFetchPullRequest:
+    """Test suite for fetch_pull_request activity."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_pull_request_returns_output_with_correct_fields(self) -> None:
+        """fetch_pull_request returns FetchPullRequestOutput with correct fields."""
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with patch(
+                "troller.worker.activities.github_activities.GitHubClient"
+            ) as mock_client_class:
+                # Setup mock
+                mock_client = MagicMock()
+                mock_client_class.return_value = mock_client
+
+                # Mock the pull request that will be returned
+                mock_pr = PullRequest(
+                    number=42,
+                    url="https://github.com/owner/repo/pull/42",
+                    head_branch="feature/test",
+                    base_branch="main",
+                    head_sha="abc123def456",
+                    created_at=datetime(2024, 1, 1, 12, 0, 0),
+                    state="open",
+                )
+                mock_client.get_pull_request.return_value = mock_pr
+
+                # Test
+                input_data = FetchPullRequestInput(
+                    repo_owner="owner",
+                    repo_name="repo",
+                    pr_number=42,
+                )
+                result = await fetch_pull_request(input_data)
+
+                # Verify
+                assert isinstance(result, FetchPullRequestOutput)
+                assert result.number == 42
+                assert result.url == "https://github.com/owner/repo/pull/42"
+                assert result.state == "open"
+                assert result.merged_at is None
+                assert result.merged_by is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_pull_request_calls_github_client_with_correct_args(
+        self,
+    ) -> None:
+        """fetch_pull_request calls GitHubClient.get_pull_request with correct parameters."""
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with patch(
+                "troller.worker.activities.github_activities.GitHubClient"
+            ) as mock_client_class:
+                # Setup mock
+                mock_client = MagicMock()
+                mock_client_class.return_value = mock_client
+
+                mock_pr = PullRequest(
+                    number=123,
+                    url="https://github.com/test/test/pull/123",
+                    head_branch="feature/branch",
+                    base_branch="main",
+                    head_sha="def456",
+                    created_at=datetime(2024, 1, 1, 12, 0, 0),
+                    state="open",
+                )
+                mock_client.get_pull_request.return_value = mock_pr
+
+                # Test
+                input_data = FetchPullRequestInput(
+                    repo_owner="test-owner",
+                    repo_name="test-repo",
+                    pr_number=123,
+                )
+                await fetch_pull_request(input_data)
+
+                # Verify
+                mock_client.get_pull_request.assert_called_once_with(
+                    owner="test-owner",
+                    repo="test-repo",
+                    pr_number=123,
+                )
+
+    @pytest.mark.asyncio
+    async def test_fetch_pull_request_returns_merged_state(self) -> None:
+        """fetch_pull_request returns merged state with merged_at and merged_by."""
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "test-token"}):
+            with patch(
+                "troller.worker.activities.github_activities.GitHubClient"
+            ) as mock_client_class:
+                # Setup mock
+                mock_client = MagicMock()
+                mock_client_class.return_value = mock_client
+
+                # Mock the client to return a PR with merged state and metadata
+                merged_at = datetime(2024, 1, 2, 12, 0, 0)
+                mock_pr = PullRequest(
+                    number=42,
+                    url="https://github.com/owner/repo/pull/42",
+                    head_branch="feature/test",
+                    base_branch="main",
+                    head_sha="abc123",
+                    created_at=datetime(2024, 1, 1, 12, 0, 0),
+                    state="merged",
+                    merged_at=merged_at,
+                    merged_by="reviewer",
+                )
+                mock_client.get_pull_request.return_value = mock_pr
+
+                # Test
+                input_data = FetchPullRequestInput(
+                    repo_owner="owner",
+                    repo_name="repo",
+                    pr_number=42,
+                )
+                result = await fetch_pull_request(input_data)
+
+                # Verify merged state and metadata
+                assert result.state == "merged"
+                assert result.merged_at == merged_at.isoformat()
+                assert result.merged_by == "reviewer"
