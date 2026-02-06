@@ -110,8 +110,13 @@ class GitHubClient:
 
         # Determine the actual state - PyGithub returns "closed" for merged PRs
         # Check the merged flag to distinguish merged from closed
+        merged_at = None
+        merged_by = None
         if github_pr.merged:
             state = "merged"
+            merged_at = github_pr.merged_at
+            if github_pr.merged_by is not None:
+                merged_by = github_pr.merged_by.login
         elif github_pr.state == "closed":
             state = "closed"
         else:
@@ -125,4 +130,6 @@ class GitHubClient:
             head_sha=github_pr.head.sha,
             created_at=github_pr.created_at,
             state=state,  # type: ignore[arg-type]
+            merged_at=merged_at,
+            merged_by=merged_by,
         )

@@ -717,9 +717,8 @@ class TestFetchPullRequest:
                 mock_client = MagicMock()
                 mock_client_class.return_value = mock_client
 
-                # Note: The domain model doesn't have merged_at/merged_by
-                # We need to extend the domain model or handle this differently
-                # For now, mock the client to return a PR with merged state
+                # Mock the client to return a PR with merged state and metadata
+                merged_at = datetime(2024, 1, 2, 12, 0, 0)
                 mock_pr = PullRequest(
                     number=42,
                     url="https://github.com/owner/repo/pull/42",
@@ -728,6 +727,8 @@ class TestFetchPullRequest:
                     head_sha="abc123",
                     created_at=datetime(2024, 1, 1, 12, 0, 0),
                     state="merged",
+                    merged_at=merged_at,
+                    merged_by="reviewer",
                 )
                 mock_client.get_pull_request.return_value = mock_pr
 
@@ -739,5 +740,7 @@ class TestFetchPullRequest:
                 )
                 result = await fetch_pull_request(input_data)
 
-                # Verify
+                # Verify merged state and metadata
                 assert result.state == "merged"
+                assert result.merged_at == merged_at.isoformat()
+                assert result.merged_by == "reviewer"

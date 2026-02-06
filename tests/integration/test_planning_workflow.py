@@ -19,6 +19,7 @@ from troller.worker.activities.github_activities import (
     create_feature_branch,
     create_pull_request,
     fetch_issue,
+    fetch_pull_request,
 )
 from troller.worker.activities.implementation_activities import run_implementation_agent
 from troller.worker.activities.planning_activities import run_planning_agent
@@ -228,6 +229,20 @@ async def test_planning_workflow_end_to_end(
             )
             mock_gh_client.create_pull_request.return_value = pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=1,
+                url="https://github.com/test-org/test-repo/pull/1",
+                head_branch="troller/issue-42",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+                merged_at=datetime.now(),
+                merged_by="reviewer",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Create workflow environment
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -241,6 +256,7 @@ async def test_planning_workflow_end_to_end(
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     # Execute workflow
@@ -400,6 +416,20 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
             )
             mock_gh_client.create_pull_request.return_value = pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=1,
+                url="https://github.com/test/test/pull/1",
+                head_branch="troller/issue-123",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+                merged_at=datetime.now(),
+                merged_by="reviewer",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Create workflow environment and execute
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -413,6 +443,7 @@ async def test_planning_workflow_validates_plan_metadata() -> None:
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     workflow_input = IssueResolutionWorkflowInput(
@@ -572,6 +603,20 @@ async def test_planning_workflow_validates_step_structure() -> None:
             )
             mock_gh_client.create_pull_request.return_value = pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=1,
+                url="https://github.com/test/test/pull/1",
+                head_branch="troller/issue-456",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+                merged_at=datetime.now(),
+                merged_by="reviewer",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Execute workflow
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -585,6 +630,7 @@ async def test_planning_workflow_validates_step_structure() -> None:
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     workflow_input = IssueResolutionWorkflowInput(
@@ -744,6 +790,20 @@ async def test_planning_workflow_with_optional_fields() -> None:
             )
             mock_gh_client.create_pull_request.return_value = pr
 
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=1,
+                url="https://github.com/test/test/pull/1",
+                head_branch="troller/issue-789",
+                base_branch="main",
+                head_sha="commit-1",
+                created_at=datetime.now(),
+                state="merged",
+                merged_at=datetime.now(),
+                merged_by="reviewer",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
             # Execute workflow
             async with await WorkflowEnvironment.start_time_skipping() as env:
                 async with Worker(
@@ -757,6 +817,7 @@ async def test_planning_workflow_with_optional_fields() -> None:
                         run_implementation_agent,
                         run_review_agent,
                         create_pull_request,
+                        fetch_pull_request,
                     ],
                 ):
                     workflow_input = IssueResolutionWorkflowInput(

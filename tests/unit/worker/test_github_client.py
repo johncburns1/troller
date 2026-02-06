@@ -298,8 +298,10 @@ class TestGitHubClient:
                     pr_number=42,
                 )
 
-                # Verify merged state
+                # Verify merged state and metadata
                 assert result.state == "merged"
+                assert result.merged_at == datetime(2024, 1, 2, 12, 0, 0)
+                assert result.merged_by == "reviewer"
 
     def test_get_pull_request_returns_closed_state_when_closed_not_merged(self) -> None:
         """get_pull_request returns 'closed' state when PR is closed but not merged."""

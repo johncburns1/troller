@@ -1453,6 +1453,7 @@ async def test_workflow_detects_merged_pr_and_returns_merged_state() -> None:
             mock_gh_client.create_pull_request.return_value = pr
 
             # Setup get_pull_request mock - return merged after first poll
+            merged_at = datetime(2024, 1, 2, 12, 0, 0)
             merged_pr = PullRequest(
                 number=42,
                 url="https://github.com/test-owner/test-repo/pull/42",
@@ -1461,6 +1462,8 @@ async def test_workflow_detects_merged_pr_and_returns_merged_state() -> None:
                 head_sha="commit-1",
                 created_at=datetime.now(),
                 state="merged",
+                merged_at=merged_at,
+                merged_by="reviewer",
             )
             mock_gh_client.get_pull_request.return_value = merged_pr
 
@@ -1497,6 +1500,9 @@ async def test_workflow_detects_merged_pr_and_returns_merged_state() -> None:
                     # Verify workflow detected merged state
                     assert isinstance(result, IssueResolutionWorkflowOutput)
                     assert result.final_state == "merged"
+                    # Verify merged metadata is populated
+                    assert result.merged_at == merged_at.isoformat()
+                    assert result.merged_by == "reviewer"
 
 
 @pytest.mark.asyncio

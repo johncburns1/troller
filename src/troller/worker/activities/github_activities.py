@@ -211,12 +211,15 @@ async def fetch_pull_request(input: FetchPullRequestInput) -> FetchPullRequestOu
     )
 
     # Convert domain model to activity output
+    # Convert datetime to ISO string for serialization
+    merged_at_str = pr.merged_at.isoformat() if pr.merged_at else None
+
     return FetchPullRequestOutput(
         number=pr.number,
         url=pr.url,
         state=pr.state,
-        merged_at=None,  # Domain model doesn't track this yet
-        merged_by=None,  # Domain model doesn't track this yet
+        merged_at=merged_at_str,
+        merged_by=pr.merged_by,
     )
 
 
