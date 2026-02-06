@@ -1874,3 +1874,264 @@ async def test_workflow_returns_timeout_when_pr_stays_open() -> None:
                     # Verify workflow returned timeout state
                     assert isinstance(result, IssueResolutionWorkflowOutput)
                     assert result.final_state == "timeout"
+
+
+@pytest.mark.asyncio
+async def test_workflow_creates_pr_with_comprehensive_body_content() -> None:
+    """Test workflow creates PR with comprehensive body containing all expected sections."""
+    with patch.dict(
+        os.environ, {"GITHUB_TOKEN": "test-token", "ANTHROPIC_API_KEY": "test-key"}
+    ):
+        with (
+            patch(
+                "troller.worker.activities.github_activities.GitHubClient"
+            ) as mock_gh_client_class,
+            patch(
+                "troller.worker.activities.planning_activities.PlanningService"
+            ) as mock_planning_service_class,
+            patch(
+                "troller.worker.activities.github_activities.RepoCloner"
+            ) as mock_cloner_class,
+            patch(
+                "troller.worker.activities.github_activities.GitOperations"
+            ) as mock_git_ops_class,
+            patch(
+                "troller.worker.activities.implementation_activities.ImplementationService"
+            ) as mock_impl_service_class,
+            patch(
+                "troller.worker.activities.review_activities.ReviewService"
+            ) as mock_review_service_class,
+        ):
+            from datetime import datetime
+
+            from troller.worker.activities.activity_outputs import CommitOutput
+            from troller.worker.activities.github_activities import (
+                create_feature_branch,
+            )
+            from troller.worker.activities.implementation_activities import (
+                run_implementation_agent,
+            )
+
+            # Setup GitHub mock
+            mock_gh_client = MagicMock()
+            mock_gh_client_class.return_value = mock_gh_client
+            mock_github_issue = MagicMock(spec=GithubIssue)
+            mock_github_issue.number = 100
+            mock_github_issue.title = "Add comprehensive PR body"
+            mock_github_issue.body = "Test description for PR body verification"
+            mock_github_issue.labels = []
+            mock_github_issue.html_url = (
+                "https://github.com/test-owner/test-repo/issues/100"
+            )
+            mock_gh_client.get_issue.return_value = mock_github_issue
+
+            # Setup planning mock with rich content
+            mock_planning_service = MagicMock()
+            mock_planning_service_class.return_value = mock_planning_service
+            expected_plan = Plan(
+                summary="Implement comprehensive PR body builder",
+                steps=[
+                    PlanStep(
+                        id="step-1",
+                        description="Create PRBodyBuilder service",
+                        completed=False,
+                    ),
+                    PlanStep(
+                        id="step-2",
+                        description="Add unit tests for PRBodyBuilder",
+                        completed=False,
+                    ),
+                    PlanStep(
+                        id="step-3",
+                        description="Integrate into workflow",
+                        completed=False,
+                    ),
+                ],
+                created_at=datetime.now(),
+                metadata={"issue_number": 100},
+                technical_approach="Create a pure domain service following hexagonal architecture",
+                testing_strategy="Unit tests for all formatting scenarios",
+            )
+            expected_metadata = LLMMetadataOutput(
+                total_cost_usd=0.10,
+                input_tokens=800,
+                output_tokens=400,
+                duration_ms=4000,
+                duration_api_ms=3500,
+                num_turns=1,
+                model="claude-opus-4-5-20251101",
+                tools_used=["Skill", "Read"],
+                execution_flow="Invoked feature-planner skill",
+            )
+            mock_planning_service.generate_plan = AsyncMock(
+                return_value=(expected_plan, expected_metadata)
+            )
+
+            # Setup git mocks
+            mock_cloner = MagicMock()
+            mock_cloner_class.return_value = mock_cloner
+            mock_git_ops = MagicMock()
+            mock_git_ops_class.return_value = mock_git_ops
+            mock_cloner.clone_to_temp = AsyncMock(
+                return_value=(Path("/tmp/t"), Path("/tmp/t/r"), "sha")
+            )
+            mock_git_ops.create_branch = AsyncMock()
+            mock_git_ops.push_branch = AsyncMock()
+            mock_git_ops.get_current_sha = AsyncMock(return_value="branch-sha")
+
+            # Setup implementation mock with commits
+            mock_impl_service = MagicMock()
+            mock_impl_service_class.return_value = mock_impl_service
+            commits = [
+                CommitOutput(
+                    sha="abc1234",
+                    message="Create PRBodyBuilder service",
+                    timestamp=datetime.now(),
+                    internal_review_feedback=None,
+                ),
+                CommitOutput(
+                    sha="def5678",
+                    message="Add unit tests",
+                    timestamp=datetime.now(),
+                    internal_review_feedback=None,
+                ),
+            ]
+            mock_impl_service.implement_changes = AsyncMock(
+                return_value=(commits, expected_metadata)
+            )
+
+            # Setup review service mock
+            mock_review_service = MagicMock()
+            mock_review_service_class.return_value = mock_review_service
+            review_feedback = InternalReviewFeedback(
+                approved=True,
+                comments=["Looks good"],
+                suggested_changes=[],
+                timestamp=datetime.now(),
+            )
+            review_metadata = LLMMetadataOutput(
+                total_cost_usd=0.05,
+                input_tokens=400,
+                output_tokens=200,
+                duration_ms=2000,
+                duration_api_ms=1800,
+                num_turns=1,
+                model="claude-sonnet-4-5-20250929",
+                tools_used=[],
+                execution_flow="Structured review query",
+            )
+            mock_review_service.review_changes = AsyncMock(
+                return_value=(review_feedback, review_metadata)
+            )
+
+            # Setup PR creation mock - capture the body argument
+            from troller.domain.models.pull_request import PullRequest
+
+            captured_pr_body: list[str] = []
+
+            def capture_create_pr(
+                owner: str,
+                repo: str,
+                title: str,
+                body: str,
+                head_branch: str,
+                base_branch: str,
+                draft: bool = False,
+            ) -> PullRequest:
+                captured_pr_body.append(body)
+                return PullRequest(
+                    number=50,
+                    url=f"https://github.com/{owner}/{repo}/pull/50",
+                    head_branch=head_branch,
+                    base_branch=base_branch,
+                    head_sha="def5678",
+                    created_at=datetime.now(),
+                    state="open",
+                )
+
+            mock_gh_client.create_pull_request.side_effect = capture_create_pr
+
+            # Setup get_pull_request mock - return merged for test completion
+            merged_pr = PullRequest(
+                number=50,
+                url="https://github.com/test-owner/test-repo/pull/50",
+                head_branch="troller/issue-100",
+                base_branch="main",
+                head_sha="def5678",
+                created_at=datetime.now(),
+                state="merged",
+            )
+            mock_gh_client.get_pull_request.return_value = merged_pr
+
+            # Run test
+            async with await WorkflowEnvironment.start_time_skipping() as env:
+                async with Worker(
+                    env.client,
+                    task_queue="test-queue",
+                    workflows=[IssueResolutionWorkflow],
+                    activities=[
+                        fetch_issue,
+                        run_planning_agent,
+                        create_feature_branch,
+                        run_implementation_agent,
+                        run_review_agent,
+                        create_pull_request,
+                        fetch_pull_request,
+                    ],
+                ):
+                    input_data = IssueResolutionWorkflowInput(
+                        repo_owner="test-owner",
+                        repo_name="test-repo",
+                        issue_number=100,
+                        target_branch="main",
+                    )
+
+                    result = await env.client.execute_workflow(
+                        IssueResolutionWorkflow.run,
+                        input_data,
+                        id="test-workflow-pr-body",
+                        task_queue="test-queue",
+                    )
+
+                    # Verify workflow completed
+                    assert isinstance(result, IssueResolutionWorkflowOutput)
+                    assert result.pull_request is not None
+
+                    # Verify PR body was captured
+                    assert len(captured_pr_body) == 1
+                    pr_body = captured_pr_body[0]
+
+                    # Verify PR body contains all expected sections
+                    assert "Resolves #100" in pr_body, "PR body should reference issue"
+                    assert "## Summary" in pr_body, (
+                        "PR body should have Summary section"
+                    )
+                    assert "Implement comprehensive PR body builder" in pr_body, (
+                        "PR body should contain plan summary"
+                    )
+                    assert "## Technical Approach" in pr_body, (
+                        "PR body should have Technical Approach section"
+                    )
+                    assert "hexagonal architecture" in pr_body, (
+                        "PR body should contain technical approach content"
+                    )
+                    assert "## Implementation Steps" in pr_body, (
+                        "PR body should have Implementation Steps section"
+                    )
+                    assert "Create PRBodyBuilder service" in pr_body, (
+                        "PR body should list implementation steps"
+                    )
+                    assert "## Testing Strategy" in pr_body, (
+                        "PR body should have Testing Strategy section"
+                    )
+                    assert "Unit tests" in pr_body, (
+                        "PR body should contain testing strategy"
+                    )
+                    assert "## Commits" in pr_body, (
+                        "PR body should have Commits section"
+                    )
+                    assert "abc1234" in pr_body, "PR body should list commit SHAs"
+                    assert "def5678" in pr_body, "PR body should list all commit SHAs"
+                    assert "🤖 Generated by Troller" in pr_body, (
+                        "PR body should have footer"
+                    )
