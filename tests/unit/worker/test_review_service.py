@@ -5,42 +5,51 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
 
 from troller.domain.models.commit import Commit, InternalReviewFeedback
 from troller.domain.models.issue import Issue
 from troller.domain.models.plan import Plan, PlanStep
-from troller.worker.adapters.claude_client import ClaudeClient, StructuredQueryResult
+from troller.worker.adapters.claude_client import ClaudeClient
 from troller.worker.adapters.repo_cloner import RepoCloner
-from troller.worker.services.review_service import ReviewResponse, ReviewService
+from troller.worker.services.review_service import ReviewService
 
 
-def make_structured_query_result(
+def make_mock_result_message(
     approved: bool,
     comments: list[str] | None = None,
     suggested_changes: list[str] | None = None,
     input_tokens: int = 100,
     output_tokens: int = 50,
-    model: str = "test-model",
-) -> StructuredQueryResult[ReviewResponse]:
-    """Create a mock StructuredQueryResult for tests."""
-    response = ReviewResponse(
-        approved=approved,
-        comments=comments or [],
-        suggested_changes=suggested_changes or [],
+) -> MagicMock:
+    """Create a mock ResultMessage for tests."""
+    mock_result = MagicMock(spec=ResultMessage)
+    mock_result.structured_output = {
+        "approved": approved,
+        "comments": comments or [],
+        "suggested_changes": suggested_changes or [],
+    }
+    mock_result.usage = {"input_tokens": input_tokens, "output_tokens": output_tokens}
+    mock_result.subtype = "success"
+    return mock_result
+
+
+def make_mock_query(
+    approved: bool,
+    comments: list[str] | None = None,
+    suggested_changes: list[str] | None = None,
+    input_tokens: int = 100,
+    output_tokens: int = 50,
+):
+    """Create a mock query async iterator."""
+    result_message = make_mock_result_message(
+        approved, comments, suggested_changes, input_tokens, output_tokens
     )
-    return StructuredQueryResult(
-        result=response,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        model=model,
-    )
 
+    async def mock_query_response(prompt: str, options: ClaudeAgentOptions):
+        yield result_message
 
-class MockResultMessage:
-    """Mock result message with metadata."""
-
-    def __init__(self) -> None:
-        self.subtype = "result"
+    return mock_query_response
 
 
 class TestReviewService:
@@ -58,9 +67,7 @@ class TestReviewService:
 
         # Mock Claude client - returns approval
         mock_client = MagicMock(spec=ClaudeClient)
-        mock_client.structured_query = AsyncMock(
-            return_value=make_structured_query_result(approved=True)
-        )
+        mock_client.query = make_mock_query(approved=True)
 
         service = ReviewService(mock_client, mock_cloner)
 
@@ -102,9 +109,7 @@ class TestReviewService:
 
         # Mock Claude client - returns approval
         mock_client = MagicMock(spec=ClaudeClient)
-        mock_client.structured_query = AsyncMock(
-            return_value=make_structured_query_result(approved=True)
-        )
+        mock_client.query = make_mock_query(approved=True)
 
         service = ReviewService(mock_client, mock_cloner)
 
@@ -142,11 +147,14 @@ class TestReviewService:
         )
         mock_cloner.cleanup = MagicMock()
 
-        # Mock Claude client with failing query
+        # Mock Claude client with query that raises error
         mock_client = MagicMock(spec=ClaudeClient)
-        mock_client.structured_query = AsyncMock(
-            side_effect=RuntimeError("Review failed")
-        )
+
+        async def failing_query(prompt: str, options: ClaudeAgentOptions):
+            raise RuntimeError("Review failed")
+            yield  # noqa: B901 - unreachable but needed for async generator type
+
+        mock_client.query = failing_query
 
         service = ReviewService(mock_client, mock_cloner)
 
@@ -185,11 +193,9 @@ class TestReviewService:
 
         # Mock Claude client - returns approval with comments
         mock_client = MagicMock(spec=ClaudeClient)
-        mock_client.structured_query = AsyncMock(
-            return_value=make_structured_query_result(
-                approved=True,
-                comments=["Code looks good", "Well tested"],
-            )
+        mock_client.query = make_mock_query(
+            approved=True,
+            comments=["Code looks good", "Well tested"],
         )
 
         service = ReviewService(mock_client, mock_cloner)
@@ -231,15 +237,13 @@ class TestReviewService:
 
         # Mock Claude client - returns rejection with changes
         mock_client = MagicMock(spec=ClaudeClient)
-        mock_client.structured_query = AsyncMock(
-            return_value=make_structured_query_result(
-                approved=False,
-                comments=["Missing test coverage", "Code style issues"],
-                suggested_changes=[
-                    "Add unit tests for edge cases",
-                    "Fix formatting in service.py",
-                ],
-            )
+        mock_client.query = make_mock_query(
+            approved=False,
+            comments=["Missing test coverage", "Code style issues"],
+            suggested_changes=[
+                "Add unit tests for edge cases",
+                "Fix formatting in service.py",
+            ],
         )
 
         service = ReviewService(mock_client, mock_cloner)
@@ -270,6 +274,154 @@ class TestReviewService:
         assert "Add unit tests for edge cases" in feedback.suggested_changes
 
     @pytest.mark.asyncio
+    async def test_review_changes_passes_cwd_to_query(self) -> None:
+        """review_changes passes repo_path as cwd to Claude query."""
+        # Mock RepoCloner
+        mock_cloner = MagicMock(spec=RepoCloner)
+        mock_cloner.clone_to_temp = AsyncMock(
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
+        )
+        mock_cloner.cleanup = MagicMock()
+
+        # Mock Claude client to capture options
+        mock_client = MagicMock(spec=ClaudeClient)
+        captured_options: list[ClaudeAgentOptions] = []
+
+        async def capture_options(prompt: str, options: ClaudeAgentOptions):
+            captured_options.append(options)
+            mock_result = make_mock_result_message(approved=True)
+            yield mock_result
+
+        mock_client.query = capture_options
+
+        service = ReviewService(mock_client, mock_cloner)
+
+        commits = [
+            Commit(sha="abc123", message="Test commit", timestamp=datetime.now())
+        ]
+        plan = Plan(
+            summary="Test plan",
+            steps=[PlanStep(id="step-1", description="Test", completed=True)],
+            created_at=datetime.now(),
+        )
+        issue = Issue(number=1, title="Test", description="Test description")
+
+        await service.review_changes(
+            commits=commits,
+            plan=plan,
+            issue=issue,
+            repo_owner="owner",
+            repo_name="repo",
+            branch_name="test-branch",
+        )
+
+        # Verify cwd was set to repo_path
+        assert len(captured_options) > 0
+        options = captured_options[0]
+        assert options.cwd == "/tmp/test/repo"
+
+    @pytest.mark.asyncio
+    async def test_review_changes_uses_read_only_tools(self) -> None:
+        """review_changes configures allowed_tools for read-only code inspection."""
+        # Mock RepoCloner
+        mock_cloner = MagicMock(spec=RepoCloner)
+        mock_cloner.clone_to_temp = AsyncMock(
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
+        )
+        mock_cloner.cleanup = MagicMock()
+
+        # Mock Claude client to capture options
+        mock_client = MagicMock(spec=ClaudeClient)
+        captured_options: list[ClaudeAgentOptions] = []
+
+        async def capture_options(prompt: str, options: ClaudeAgentOptions):
+            captured_options.append(options)
+            mock_result = make_mock_result_message(approved=True)
+            yield mock_result
+
+        mock_client.query = capture_options
+
+        service = ReviewService(mock_client, mock_cloner)
+
+        commits = [
+            Commit(sha="abc123", message="Test commit", timestamp=datetime.now())
+        ]
+        plan = Plan(
+            summary="Test plan",
+            steps=[PlanStep(id="step-1", description="Test", completed=True)],
+            created_at=datetime.now(),
+        )
+        issue = Issue(number=1, title="Test", description="Test description")
+
+        await service.review_changes(
+            commits=commits,
+            plan=plan,
+            issue=issue,
+            repo_owner="owner",
+            repo_name="repo",
+            branch_name="test-branch",
+        )
+
+        # Verify allowed_tools includes read-only tools
+        assert len(captured_options) > 0
+        options = captured_options[0]
+        assert "Read" in options.allowed_tools
+        assert "Grep" in options.allowed_tools
+        assert "Glob" in options.allowed_tools
+        # Should NOT include write tools
+        assert "Write" not in options.allowed_tools
+        assert "Edit" not in options.allowed_tools
+
+    @pytest.mark.asyncio
+    async def test_review_changes_uses_structured_output(self) -> None:
+        """review_changes configures output_format for structured JSON output."""
+        # Mock RepoCloner
+        mock_cloner = MagicMock(spec=RepoCloner)
+        mock_cloner.clone_to_temp = AsyncMock(
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
+        )
+        mock_cloner.cleanup = MagicMock()
+
+        # Mock Claude client to capture options
+        mock_client = MagicMock(spec=ClaudeClient)
+        captured_options: list[ClaudeAgentOptions] = []
+
+        async def capture_options(prompt: str, options: ClaudeAgentOptions):
+            captured_options.append(options)
+            mock_result = make_mock_result_message(approved=True)
+            yield mock_result
+
+        mock_client.query = capture_options
+
+        service = ReviewService(mock_client, mock_cloner)
+
+        commits = [
+            Commit(sha="abc123", message="Test commit", timestamp=datetime.now())
+        ]
+        plan = Plan(
+            summary="Test plan",
+            steps=[PlanStep(id="step-1", description="Test", completed=True)],
+            created_at=datetime.now(),
+        )
+        issue = Issue(number=1, title="Test", description="Test description")
+
+        await service.review_changes(
+            commits=commits,
+            plan=plan,
+            issue=issue,
+            repo_owner="owner",
+            repo_name="repo",
+            branch_name="test-branch",
+        )
+
+        # Verify output_format is configured
+        assert len(captured_options) > 0
+        options = captured_options[0]
+        assert options.output_format is not None
+        assert options.output_format["type"] == "json_schema"
+        assert "schema" in options.output_format
+
+    @pytest.mark.asyncio
     async def test_review_changes_includes_plan_and_issue_in_prompt(self) -> None:
         """review_changes includes plan summary and issue details in prompt."""
         # Mock RepoCloner
@@ -283,11 +435,12 @@ class TestReviewService:
         mock_client = MagicMock(spec=ClaudeClient)
         captured_prompts: list[str] = []
 
-        async def capture_prompt(prompt: str, schema: type, model: str | None = None):
+        async def capture_prompt(prompt: str, options: ClaudeAgentOptions):
             captured_prompts.append(prompt)
-            return make_structured_query_result(approved=True)
+            mock_result = make_mock_result_message(approved=True)
+            yield mock_result
 
-        mock_client.structured_query = capture_prompt
+        mock_client.query = capture_prompt
 
         service = ReviewService(mock_client, mock_cloner)
 
@@ -341,11 +494,12 @@ class TestReviewService:
         mock_client = MagicMock(spec=ClaudeClient)
         captured_prompts: list[str] = []
 
-        async def capture_prompt(prompt: str, schema: type, model: str | None = None):
+        async def capture_prompt(prompt: str, options: ClaudeAgentOptions):
             captured_prompts.append(prompt)
-            return make_structured_query_result(approved=True)
+            mock_result = make_mock_result_message(approved=True)
+            yield mock_result
 
-        mock_client.structured_query = capture_prompt
+        mock_client.query = capture_prompt
 
         service = ReviewService(mock_client, mock_cloner)
 
@@ -394,13 +548,10 @@ class TestReviewService:
 
         # Mock Claude client
         mock_client = MagicMock(spec=ClaudeClient)
-        mock_client.structured_query = AsyncMock(
-            return_value=make_structured_query_result(
-                approved=True,
-                input_tokens=200,
-                output_tokens=75,
-                model="claude-sonnet-4-5",
-            )
+        mock_client.query = make_mock_query(
+            approved=True,
+            input_tokens=200,
+            output_tokens=75,
         )
 
         service = ReviewService(mock_client, mock_cloner)
@@ -430,4 +581,86 @@ class TestReviewService:
         assert llm_metadata.num_turns == 1
         assert llm_metadata.input_tokens == 200
         assert llm_metadata.output_tokens == 75
-        assert llm_metadata.model == "claude-sonnet-4-5"
+
+    @pytest.mark.asyncio
+    async def test_review_raises_error_when_no_result_message(self) -> None:
+        """review_changes raises RuntimeError when no ResultMessage received."""
+        # Mock RepoCloner
+        mock_cloner = MagicMock(spec=RepoCloner)
+        mock_cloner.clone_to_temp = AsyncMock(
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
+        )
+        mock_cloner.cleanup = MagicMock()
+
+        # Mock Claude client that yields no ResultMessage
+        mock_client = MagicMock(spec=ClaudeClient)
+
+        async def empty_query(prompt: str, options: ClaudeAgentOptions):
+            yield MagicMock()  # Not a ResultMessage
+
+        mock_client.query = empty_query
+
+        service = ReviewService(mock_client, mock_cloner)
+
+        commits = [
+            Commit(sha="abc123", message="Test commit", timestamp=datetime.now())
+        ]
+        plan = Plan(
+            summary="Test plan",
+            steps=[PlanStep(id="step-1", description="Test", completed=True)],
+            created_at=datetime.now(),
+        )
+        issue = Issue(number=1, title="Test", description="Test description")
+
+        with pytest.raises(RuntimeError, match="No result message received"):
+            await service.review_changes(
+                commits=commits,
+                plan=plan,
+                issue=issue,
+                repo_owner="owner",
+                repo_name="repo",
+                branch_name="test-branch",
+            )
+
+    @pytest.mark.asyncio
+    async def test_review_raises_error_when_no_structured_output(self) -> None:
+        """review_changes raises RuntimeError when structured_output is None."""
+        # Mock RepoCloner
+        mock_cloner = MagicMock(spec=RepoCloner)
+        mock_cloner.clone_to_temp = AsyncMock(
+            return_value=(Path("/tmp/test"), Path("/tmp/test/repo"), "abc123")
+        )
+        mock_cloner.cleanup = MagicMock()
+
+        # Mock Claude client that returns ResultMessage without structured_output
+        mock_client = MagicMock(spec=ClaudeClient)
+
+        async def no_structured_query(prompt: str, options: ClaudeAgentOptions):
+            mock_result = MagicMock(spec=ResultMessage)
+            mock_result.structured_output = None
+            mock_result.subtype = "error_max_turns"
+            yield mock_result
+
+        mock_client.query = no_structured_query
+
+        service = ReviewService(mock_client, mock_cloner)
+
+        commits = [
+            Commit(sha="abc123", message="Test commit", timestamp=datetime.now())
+        ]
+        plan = Plan(
+            summary="Test plan",
+            steps=[PlanStep(id="step-1", description="Test", completed=True)],
+            created_at=datetime.now(),
+        )
+        issue = Issue(number=1, title="Test", description="Test description")
+
+        with pytest.raises(RuntimeError, match="No structured output.*error_max_turns"):
+            await service.review_changes(
+                commits=commits,
+                plan=plan,
+                issue=issue,
+                repo_owner="owner",
+                repo_name="repo",
+                branch_name="test-branch",
+            )

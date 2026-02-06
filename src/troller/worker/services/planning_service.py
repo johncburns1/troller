@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from claude_agent_sdk import ClaudeAgentOptions
+from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
 
 from troller.domain.models.plan import (
     FileOperation,
@@ -195,22 +195,26 @@ Return a structured plan with:
         # Execute query and collect ALL messages for metadata extraction
         all_messages: list[Any] = []
         plan_response: PlanResponse | None = None
-        result_message: Any = None
+        result_message: ResultMessage | None = None
 
         async for message in self._client.query(prompt, options):
             all_messages.append(message)
 
-            # Check for structured output
-            if hasattr(message, "structured_output") and message.structured_output:
-                # Validate and parse the structured output
-                plan_response = PlanResponse.model_validate(message.structured_output)
-
-            # Check for result message with metadata
-            if hasattr(message, "subtype"):
+            # Check for result message with structured output
+            if isinstance(message, ResultMessage):
                 result_message = message
+                if message.structured_output is not None:
+                    # Validate and parse the structured output
+                    plan_response = PlanResponse.model_validate(
+                        message.structured_output
+                    )
 
         if not plan_response:
-            raise RuntimeError("Planning agent did not return structured output")
+            # Provide better error message with debugging info
+            subtype = result_message.subtype if result_message else "no result message"
+            raise RuntimeError(
+                f"Planning agent did not return structured output (subtype: {subtype})"
+            )
 
         # Extract metadata from collected messages
         llm_metadata = self._extract_llm_metadata(all_messages, result_message)

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from anthropic import Anthropic, AnthropicBedrock
-from claude_agent_sdk import ClaudeAgentOptions, query as agent_query
+from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query as agent_query
 from pydantic import BaseModel
 
 from troller.config import config
@@ -143,10 +143,11 @@ class ClaudeClient:
         schema: type[T],
         model: str | None = None,
         token_limit: int = 4096,
+        max_turns: int = 5,
     ) -> StructuredQueryResult[T]:
         """Query Claude with structured output guarantee.
 
-        Uses Claude Messages API with JSON schema validation to ensure the response
+        Uses Claude Agent SDK with output_format option to ensure the response
         matches the provided Pydantic schema exactly.
 
         Args:
@@ -155,6 +156,8 @@ class ClaudeClient:
             model: Claude model to use. If not specified, uses instance model
                 (from __init__) or defaults to Sonnet 4.5.
             token_limit: Maximum tokens for the response (defaults to 4096).
+            max_turns: Maximum conversation turns for the query (defaults to 5).
+                Use higher values when the query may require tool usage.
 
         Returns:
             StructuredQueryResult containing the validated result and usage info.
@@ -173,36 +176,75 @@ class ClaudeClient:
             print(f"Tokens used: {query_result.input_tokens}")
             ```
         """
-        # Get effective model with provider-specific formatting
-        effective_model = self._get_effective_model(model)
+        # Get effective model - for Agent SDK, we use simple names like "sonnet"
+        effective_model = self._get_agent_sdk_model(model)
 
-        # Use structured output to guarantee valid schema
-        # Note: response_format is passed via extra_body for type compatibility
-        response = self._anthropic_client.messages.create(
+        # Use Agent SDK with output_format for structured output
+        options = ClaudeAgentOptions(
             model=effective_model,
-            max_tokens=token_limit,
-            messages=[{"role": "user", "content": prompt}],
-            extra_body={
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "query_response",
-                        "schema": schema.model_json_schema(),
-                        "strict": True,
-                    },
-                }
+            max_turns=max_turns,
+            permission_mode="bypassPermissions",
+            output_format={
+                "type": "json_schema",
+                "schema": schema.model_json_schema(),
             },
         )
 
-        # Parse structured output - guaranteed to match schema
-        # Extract text from first content block (guaranteed to be TextBlock for our request)
-        first_content = response.content[0]
-        response_text = first_content.text if hasattr(first_content, "text") else ""
-        result = schema.model_validate_json(response_text)
+        result_message: ResultMessage | None = None
+        async for message in agent_query(prompt=prompt, options=options):
+            if isinstance(message, ResultMessage):
+                result_message = message
+                break
+
+        if result_message is None:
+            raise RuntimeError("No result message received from Agent SDK")
+
+        if result_message.structured_output is None:
+            raise RuntimeError(
+                f"No structured output in result (subtype: {result_message.subtype})"
+            )
+
+        # Validate the structured output against the schema
+        result = schema.model_validate(result_message.structured_output)
+
+        # Extract token usage from result message
+        usage = result_message.usage or {}
+        input_tokens = usage.get("input_tokens", 0)
+        output_tokens = usage.get("output_tokens", 0)
+
+        # Get the actual model used (from usage or fall back to requested)
+        actual_model = effective_model
 
         return StructuredQueryResult(
             result=result,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-            model=effective_model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            model=actual_model,
         )
+
+    def _get_agent_sdk_model(self, model: str | None) -> str:
+        """Get model name for Agent SDK.
+
+        Agent SDK uses simple model names like 'sonnet', 'opus', 'haiku'.
+
+        Args:
+            model: Optional model ID to use. Falls back to instance model or default.
+
+        Returns:
+            Model name appropriate for Agent SDK.
+        """
+        effective_model = model or self._model or "claude-sonnet-4-5-20250929"
+
+        # Map full model names to Agent SDK names
+        model_mapping = {
+            "claude-sonnet-4-5-20250929": "sonnet",
+            "claude-opus-4-5-20251101": "opus",
+            "claude-haiku-3-5-20241022": "haiku",
+        }
+
+        # Check if it's already a simple name
+        if effective_model in ("sonnet", "opus", "haiku"):
+            return effective_model
+
+        # Try to map from full name
+        return model_mapping.get(effective_model, "sonnet")

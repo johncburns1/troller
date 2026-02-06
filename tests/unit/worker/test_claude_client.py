@@ -128,23 +128,32 @@ class TestClaudeClientAnthropicProvider:
             mock_config.llm_provider.provider = "anthropic"
             with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
                 with patch(
-                    "troller.worker.adapters.claude_client.Anthropic"
-                ) as mock_anthropic_class:
+                    "troller.worker.adapters.claude_client.agent_query"
+                ) as mock_query:
                     # Define test schema
                     class TestSchema(BaseModel):
                         summary: str
                         count: int
 
-                    # Mock Anthropic client response
-                    mock_anthropic = MagicMock()
-                    mock_anthropic_class.return_value = mock_anthropic
-                    mock_response = MagicMock()
-                    mock_response.content = [
-                        MagicMock(text='{"summary": "Test summary", "count": 42}')
-                    ]
-                    mock_response.usage.input_tokens = 100
-                    mock_response.usage.output_tokens = 50
-                    mock_anthropic.messages.create.return_value = mock_response
+                    # Mock Agent SDK query response with ResultMessage
+                    mock_result = MagicMock()
+                    mock_result.structured_output = {
+                        "summary": "Test summary",
+                        "count": 42,
+                    }
+                    mock_result.usage = {"input_tokens": 100, "output_tokens": 50}
+                    mock_result.subtype = "success"
+
+                    # Import ResultMessage to check isinstance
+                    from troller.worker.adapters.claude_client import ResultMessage
+
+                    # Make mock_result pass isinstance check
+                    mock_result.__class__ = ResultMessage
+
+                    async def mock_query_response(*args, **kwargs):
+                        yield mock_result
+
+                    mock_query.side_effect = mock_query_response
 
                     client = ClaudeClient()
                     query_result = await client.structured_query(
@@ -157,75 +166,125 @@ class TestClaudeClientAnthropicProvider:
                     assert query_result.result.count == 42
                     assert query_result.input_tokens == 100
                     assert query_result.output_tokens == 50
-                    assert query_result.model == "claude-sonnet-4-5-20250929"
+                    assert query_result.model == "sonnet"
 
     @pytest.mark.asyncio
-    async def test_structured_query_uses_json_schema(self) -> None:
-        """structured_query() configures API with JSON schema validation."""
+    async def test_structured_query_passes_max_turns_to_options(self) -> None:
+        """structured_query() passes max_turns parameter to ClaudeAgentOptions."""
         with patch("troller.worker.adapters.claude_client.config") as mock_config:
             mock_config.llm_provider.provider = "anthropic"
             with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
                 with patch(
-                    "troller.worker.adapters.claude_client.Anthropic"
-                ) as mock_anthropic_class:
+                    "troller.worker.adapters.claude_client.agent_query"
+                ) as mock_query:
                     # Define test schema
                     class TestSchema(BaseModel):
                         name: str
 
-                    # Mock Anthropic client response
-                    mock_anthropic = MagicMock()
-                    mock_anthropic_class.return_value = mock_anthropic
-                    mock_response = MagicMock()
-                    mock_response.content = [MagicMock(text='{"name": "test"}')]
-                    mock_anthropic.messages.create.return_value = mock_response
+                    # Mock Agent SDK query response with ResultMessage
+                    mock_result = MagicMock()
+                    mock_result.structured_output = {"name": "test"}
+                    mock_result.usage = {"input_tokens": 10, "output_tokens": 5}
+                    mock_result.subtype = "success"
+
+                    from troller.worker.adapters.claude_client import ResultMessage
+
+                    mock_result.__class__ = ResultMessage
+
+                    async def mock_query_response(*args, **kwargs):
+                        yield mock_result
+
+                    mock_query.side_effect = mock_query_response
 
                     client = ClaudeClient()
-                    await client.structured_query(
-                        "Query", TestSchema, model="test-model"
-                    )
 
-                    # Verify messages.create was called with schema
-                    create_call = mock_anthropic.messages.create.call_args
-                    assert create_call.kwargs["model"] == "test-model"
-                    assert create_call.kwargs["max_tokens"] == 4096
-                    assert "response_format" in create_call.kwargs["extra_body"]
+                    # Test with default max_turns
+                    await client.structured_query("Query", TestSchema)
+                    call_kwargs = mock_query.call_args.kwargs
+                    options = call_kwargs["options"]
+                    assert options.max_turns == 5  # Default value
 
-                    # Verify schema configuration
-                    response_format = create_call.kwargs["extra_body"][
-                        "response_format"
-                    ]
-                    assert response_format["type"] == "json_schema"
-                    assert response_format["json_schema"]["strict"] is True
-                    assert "schema" in response_format["json_schema"]
+                    # Test with custom max_turns
+                    await client.structured_query("Query", TestSchema, max_turns=10)
+                    call_kwargs = mock_query.call_args.kwargs
+                    options = call_kwargs["options"]
+                    assert options.max_turns == 10  # Custom value
 
     @pytest.mark.asyncio
-    async def test_structured_query_defaults_to_sonnet_model(self) -> None:
-        """structured_query() uses Sonnet 4.5 by default for anthropic provider."""
+    async def test_structured_query_uses_json_schema(self) -> None:
+        """structured_query() configures Agent SDK with output_format for JSON schema."""
         with patch("troller.worker.adapters.claude_client.config") as mock_config:
             mock_config.llm_provider.provider = "anthropic"
             with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
                 with patch(
-                    "troller.worker.adapters.claude_client.Anthropic"
-                ) as mock_anthropic_class:
+                    "troller.worker.adapters.claude_client.agent_query"
+                ) as mock_query:
+                    # Define test schema
+                    class TestSchema(BaseModel):
+                        name: str
+
+                    # Mock Agent SDK query response with ResultMessage
+                    mock_result = MagicMock()
+                    mock_result.structured_output = {"name": "test"}
+                    mock_result.usage = {"input_tokens": 10, "output_tokens": 5}
+                    mock_result.subtype = "success"
+
+                    from troller.worker.adapters.claude_client import ResultMessage
+
+                    mock_result.__class__ = ResultMessage
+
+                    async def mock_query_response(*args, **kwargs):
+                        yield mock_result
+
+                    mock_query.side_effect = mock_query_response
+
+                    client = ClaudeClient()
+                    await client.structured_query("Query", TestSchema)
+
+                    # Verify agent_query was called with output_format
+                    call_kwargs = mock_query.call_args.kwargs
+                    options = call_kwargs["options"]
+                    assert options.output_format is not None
+                    assert options.output_format["type"] == "json_schema"
+                    assert "schema" in options.output_format
+
+    @pytest.mark.asyncio
+    async def test_structured_query_defaults_to_sonnet_model(self) -> None:
+        """structured_query() uses 'sonnet' by default for Agent SDK."""
+        with patch("troller.worker.adapters.claude_client.config") as mock_config:
+            mock_config.llm_provider.provider = "anthropic"
+            with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+                with patch(
+                    "troller.worker.adapters.claude_client.agent_query"
+                ) as mock_query:
                     # Define test schema
                     class TestSchema(BaseModel):
                         value: str
 
-                    # Mock Anthropic client response
-                    mock_anthropic = MagicMock()
-                    mock_anthropic_class.return_value = mock_anthropic
-                    mock_response = MagicMock()
-                    mock_response.content = [MagicMock(text='{"value": "test"}')]
-                    mock_anthropic.messages.create.return_value = mock_response
+                    # Mock Agent SDK query response with ResultMessage
+                    mock_result = MagicMock()
+                    mock_result.structured_output = {"value": "test"}
+                    mock_result.usage = {"input_tokens": 10, "output_tokens": 5}
+                    mock_result.subtype = "success"
+
+                    from troller.worker.adapters.claude_client import ResultMessage
+
+                    mock_result.__class__ = ResultMessage
+
+                    async def mock_query_response(*args, **kwargs):
+                        yield mock_result
+
+                    mock_query.side_effect = mock_query_response
 
                     client = ClaudeClient()
                     await client.structured_query(
                         "Query", TestSchema
                     )  # No model specified
 
-                    # Verify default model
-                    create_call = mock_anthropic.messages.create.call_args
-                    assert create_call.kwargs["model"] == "claude-sonnet-4-5-20250929"
+                    # Verify default model is 'sonnet' for Agent SDK
+                    call_kwargs = mock_query.call_args.kwargs
+                    options = call_kwargs["options"]
+                    assert options.model == "sonnet"
 
     @pytest.mark.asyncio
     async def test_structured_query_uses_instance_model_when_no_parameter(self) -> None:
@@ -234,25 +293,35 @@ class TestClaudeClientAnthropicProvider:
             mock_config.llm_provider.provider = "anthropic"
             with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
                 with patch(
-                    "troller.worker.adapters.claude_client.Anthropic"
-                ) as mock_anthropic_class:
+                    "troller.worker.adapters.claude_client.agent_query"
+                ) as mock_query:
                     # Define test schema
                     class TestSchema(BaseModel):
                         result: str
 
-                    # Mock Anthropic client response
-                    mock_anthropic = MagicMock()
-                    mock_anthropic_class.return_value = mock_anthropic
-                    mock_response = MagicMock()
-                    mock_response.content = [MagicMock(text='{"result": "success"}')]
-                    mock_anthropic.messages.create.return_value = mock_response
+                    # Mock Agent SDK query response with ResultMessage
+                    mock_result = MagicMock()
+                    mock_result.structured_output = {"result": "success"}
+                    mock_result.usage = {"input_tokens": 10, "output_tokens": 5}
+                    mock_result.subtype = "success"
 
+                    from troller.worker.adapters.claude_client import ResultMessage
+
+                    mock_result.__class__ = ResultMessage
+
+                    async def mock_query_response(*args, **kwargs):
+                        yield mock_result
+
+                    mock_query.side_effect = mock_query_response
+
+                    # Instance model is mapped to Agent SDK model name
                     client = ClaudeClient(model="claude-opus-4-5-20251101")
                     await client.structured_query("Query", TestSchema)
 
-                    # Verify instance model was used
-                    create_call = mock_anthropic.messages.create.call_args
-                    assert create_call.kwargs["model"] == "claude-opus-4-5-20251101"
+                    # Verify instance model was converted to Agent SDK format
+                    call_kwargs = mock_query.call_args.kwargs
+                    options = call_kwargs["options"]
+                    assert options.model == "opus"
 
     @pytest.mark.asyncio
     async def test_structured_query_parameter_overrides_instance_model(self) -> None:
@@ -261,27 +330,38 @@ class TestClaudeClientAnthropicProvider:
             mock_config.llm_provider.provider = "anthropic"
             with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
                 with patch(
-                    "troller.worker.adapters.claude_client.Anthropic"
-                ) as mock_anthropic_class:
+                    "troller.worker.adapters.claude_client.agent_query"
+                ) as mock_query:
                     # Define test schema
                     class TestSchema(BaseModel):
                         data: str
 
-                    # Mock Anthropic client response
-                    mock_anthropic = MagicMock()
-                    mock_anthropic_class.return_value = mock_anthropic
-                    mock_response = MagicMock()
-                    mock_response.content = [MagicMock(text='{"data": "test"}')]
-                    mock_anthropic.messages.create.return_value = mock_response
+                    # Mock Agent SDK query response with ResultMessage
+                    mock_result = MagicMock()
+                    mock_result.structured_output = {"data": "test"}
+                    mock_result.usage = {"input_tokens": 10, "output_tokens": 5}
+                    mock_result.subtype = "success"
+
+                    from troller.worker.adapters.claude_client import ResultMessage
+
+                    mock_result.__class__ = ResultMessage
+
+                    async def mock_query_response(*args, **kwargs):
+                        yield mock_result
+
+                    mock_query.side_effect = mock_query_response
 
                     client = ClaudeClient(model="claude-opus-4-5-20251101")
                     await client.structured_query(
-                        "Query", TestSchema, model="claude-haiku-override"
+                        "Query",
+                        TestSchema,
+                        model="haiku",  # Override with Agent SDK name
                     )
 
                     # Verify parameter overrode instance model
-                    create_call = mock_anthropic.messages.create.call_args
-                    assert create_call.kwargs["model"] == "claude-haiku-override"
+                    call_kwargs = mock_query.call_args.kwargs
+                    options = call_kwargs["options"]
+                    assert options.model == "haiku"
 
 
 class TestClaudeClientBedrockProvider:
@@ -366,8 +446,8 @@ class TestClaudeClientBedrockProvider:
                     assert client._to_bedrock_model_id(regional_id) == regional_id
 
     @pytest.mark.asyncio
-    async def test_structured_query_converts_model_for_bedrock(self) -> None:
-        """structured_query() converts model ID to Bedrock format."""
+    async def test_structured_query_uses_agent_sdk_model_for_bedrock(self) -> None:
+        """structured_query() uses Agent SDK model names even with Bedrock provider."""
         with patch("troller.worker.adapters.claude_client.config") as mock_config:
             mock_config.llm_provider.provider = "bedrock"
             mock_config.llm_provider.bedrock_region = "us-west-2"
@@ -375,23 +455,36 @@ class TestClaudeClientBedrockProvider:
                 with patch(
                     "troller.worker.adapters.claude_client.AnthropicBedrock"
                 ) as mock_bedrock_class:
-                    # Define test schema
-                    class TestSchema(BaseModel):
-                        value: str
+                    with patch(
+                        "troller.worker.adapters.claude_client.agent_query"
+                    ) as mock_query:
+                        # Define test schema
+                        class TestSchema(BaseModel):
+                            value: str
 
-                    # Mock Bedrock client response
-                    mock_bedrock = MagicMock()
-                    mock_bedrock_class.return_value = mock_bedrock
-                    mock_response = MagicMock()
-                    mock_response.content = [MagicMock(text='{"value": "test"}')]
-                    mock_bedrock.messages.create.return_value = mock_response
+                        # Mock Bedrock client (needed for __init__)
+                        mock_bedrock = MagicMock()
+                        mock_bedrock_class.return_value = mock_bedrock
 
-                    client = ClaudeClient()
-                    await client.structured_query("Query", TestSchema)
+                        # Mock Agent SDK query response with ResultMessage
+                        mock_result = MagicMock()
+                        mock_result.structured_output = {"value": "test"}
+                        mock_result.usage = {"input_tokens": 10, "output_tokens": 5}
+                        mock_result.subtype = "success"
 
-                    # Verify model was converted to Bedrock format
-                    create_call = mock_bedrock.messages.create.call_args
-                    assert (
-                        create_call.kwargs["model"]
-                        == "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
-                    )
+                        from troller.worker.adapters.claude_client import ResultMessage
+
+                        mock_result.__class__ = ResultMessage
+
+                        async def mock_query_response(*args, **kwargs):
+                            yield mock_result
+
+                        mock_query.side_effect = mock_query_response
+
+                        client = ClaudeClient()
+                        await client.structured_query("Query", TestSchema)
+
+                        # Verify Agent SDK was called with simple model name
+                        call_kwargs = mock_query.call_args.kwargs
+                        options = call_kwargs["options"]
+                        assert options.model == "sonnet"

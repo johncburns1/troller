@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from claude_agent_sdk import ResultMessage
 
 from troller.domain.models.plan import Plan
 from troller.worker.adapters.claude_client import ClaudeClient
@@ -11,11 +12,23 @@ from troller.worker.adapters.repo_cloner import RepoCloner
 from troller.worker.services.planning_service import PlanningService
 
 
-class MockStructuredOutputMessage:
-    """Mock message with structured_output attribute."""
+def create_result_message(structured_output: dict | None = None) -> ResultMessage:
+    """Create a ResultMessage with the given structured output.
 
-    def __init__(self, structured_output: dict | None = None):
-        self.structured_output = structured_output
+    Uses actual ResultMessage from claude_agent_sdk so isinstance() checks work.
+    """
+    return ResultMessage(
+        subtype="success" if structured_output else "error",
+        duration_ms=1000,
+        duration_api_ms=800,
+        is_error=structured_output is None,
+        num_turns=1,
+        session_id="test-session",
+        total_cost_usd=0.01,
+        usage={"input_tokens": 100, "output_tokens": 200},
+        result="Plan generated" if structured_output else None,
+        structured_output=structured_output,
+    )
 
 
 def create_mock_plan_response() -> dict:
@@ -60,7 +73,7 @@ class TestPlanningService:
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = mock_query_response
 
@@ -92,7 +105,7 @@ class TestPlanningService:
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = mock_query_response
 
@@ -159,7 +172,7 @@ class TestPlanningService:
 
         async def capture_options(prompt, options):
             captured_options.append(options)
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = capture_options
 
@@ -193,7 +206,7 @@ class TestPlanningService:
 
         async def capture_options(prompt, options):
             captured_options.append(options)
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = capture_options
 
@@ -228,7 +241,7 @@ class TestPlanningService:
 
         async def count_query_calls(prompt, options):
             query_call_count[0] += 1
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = count_query_calls
 
@@ -258,7 +271,7 @@ class TestPlanningService:
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = mock_query_response
 
@@ -306,7 +319,7 @@ class TestPlanningService:
 
         async def capture_prompt(prompt, options):
             captured_prompts.append(prompt)
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = capture_prompt
 
@@ -339,7 +352,7 @@ class TestPlanningService:
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = mock_query_response
 
@@ -372,7 +385,7 @@ class TestPlanningService:
 
         async def capture_options(prompt, options):
             captured_options.append(options)
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = capture_options
 
@@ -406,7 +419,7 @@ class TestPlanningService:
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            yield MockStructuredOutputMessage(None)
+            yield create_result_message(None)
 
         mock_client.query = mock_query_response
 
@@ -439,7 +452,7 @@ class TestPlanningService:
         mock_client = MagicMock(spec=ClaudeClient)
 
         async def mock_query_response(*args, **kwargs):
-            yield MockStructuredOutputMessage(create_mock_plan_response())
+            yield create_result_message(create_mock_plan_response())
 
         mock_client.query = mock_query_response
 

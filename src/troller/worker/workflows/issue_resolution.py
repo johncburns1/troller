@@ -189,7 +189,7 @@ class IssueResolutionWorkflow:
                 repo_name=input.repo_name,
                 branch_name=self._branch_name,
             ),
-            start_to_close_timeout=timedelta(minutes=10),
+            start_to_close_timeout=timedelta(minutes=20),
             retry_policy=RetryPolicy(
                 maximum_attempts=2,
                 initial_interval=timedelta(seconds=5),

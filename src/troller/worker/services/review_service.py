@@ -11,6 +11,9 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from typing import Any
+
+from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
 from pydantic import BaseModel
 
 from troller.domain.models.commit import Commit, InternalReviewFeedback
@@ -137,7 +140,12 @@ class ReviewService:
         plan: Plan,
         issue: Issue,
     ) -> tuple[InternalReviewFeedback, StructuredQueryResult[ReviewResponse]]:
-        """Execute review using Claude structured query.
+        """Execute review using Claude query with structured outputs.
+
+        Uses the same pattern as planning/implementation services:
+        - Passes cwd to give agent access to cloned repo
+        - Uses allowed_tools for read-only code inspection
+        - Uses output_format for structured response
 
         Args:
             repo_path: Path to the cloned repository.
@@ -151,22 +159,90 @@ class ReviewService:
         # Build prompt for review
         prompt = self._build_review_prompt(commits, plan, issue)
 
-        # Execute structured query for consistent response
-        query_result = await self._client.structured_query(
-            prompt=prompt,
-            schema=ReviewResponse,
-            model=self._model,
+        # Configure agent options following planning/implementation pattern
+        options = ClaudeAgentOptions(
+            cwd=str(repo_path),  # Give agent access to cloned repo
+            model=self._get_agent_sdk_model(),  # Use simple model name
+            allowed_tools=[
+                "Skill",  # Required to invoke skills
+                "Task",  # Skills use subagents
+                "TodoWrite",  # Skills create task lists
+                "Bash",  # Skills need git/gh commands
+                "Read",  # For reading code files
+                "Grep",  # For searching code
+                "Glob",  # For finding files
+            ],
+            permission_mode="acceptEdits",  # Auto-approve operations
+            output_format={
+                "type": "json_schema",
+                "schema": ReviewResponse.model_json_schema(),
+            },
+            system_prompt={"type": "preset", "preset": "claude_code"},
+        )
+
+        # Execute query and collect messages
+        all_messages: list[Any] = []
+        result_message: ResultMessage | None = None
+
+        async for message in self._client.query(prompt, options):
+            all_messages.append(message)
+            if isinstance(message, ResultMessage):
+                result_message = message
+
+        # Extract structured output
+        if result_message is None:
+            raise RuntimeError("No result message received from Agent SDK")
+
+        if result_message.structured_output is None:
+            raise RuntimeError(
+                f"No structured output in result (subtype: {result_message.subtype})"
+            )
+
+        # Validate against schema
+        response = ReviewResponse.model_validate(result_message.structured_output)
+
+        # Extract usage info
+        usage = result_message.usage or {}
+        query_result = StructuredQueryResult(
+            result=response,
+            input_tokens=usage.get("input_tokens", 0),
+            output_tokens=usage.get("output_tokens", 0),
+            model=self._get_agent_sdk_model(),
         )
 
         # Convert to domain model
         feedback = InternalReviewFeedback(
-            approved=query_result.result.approved,
-            comments=query_result.result.comments,
-            suggested_changes=query_result.result.suggested_changes,
+            approved=response.approved,
+            comments=response.comments,
+            suggested_changes=response.suggested_changes,
             timestamp=datetime.now(UTC),
         )
 
         return feedback, query_result
+
+    def _get_agent_sdk_model(self) -> str:
+        """Get model name for Agent SDK (sonnet/opus/haiku).
+
+        Agent SDK uses simple model names like 'sonnet', 'opus', 'haiku'.
+
+        Returns:
+            Model name appropriate for Agent SDK.
+        """
+        model = self._model or "claude-sonnet-4-5-20250929"
+
+        # Map full model names to Agent SDK names
+        model_mapping = {
+            "claude-sonnet-4-5-20250929": "sonnet",
+            "claude-opus-4-5-20251101": "opus",
+            "claude-haiku-3-5-20241022": "haiku",
+        }
+
+        # Check if it's already a simple name
+        if model in ("sonnet", "opus", "haiku"):
+            return model
+
+        # Try to map from full name
+        return model_mapping.get(model, "sonnet")
 
     def _build_review_prompt(
         self,
