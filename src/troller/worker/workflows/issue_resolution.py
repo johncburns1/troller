@@ -20,9 +20,12 @@ with workflow.unsafe.imports_passed_through():
         CreatePullRequestOutput,
         FetchIssueInput,
         FetchIssueOutput,
+        FetchPullRequestInput,
+        FetchPullRequestOutput,
         create_feature_branch,
         create_pull_request,
         fetch_issue,
+        fetch_pull_request,
     )
     from troller.worker.activities.implementation_activities import (
         ImplementationActivityOutput,
@@ -55,10 +58,15 @@ class IssueResolutionWorkflow:
     4. Implements changes via coding agent
     5. Reviews implementation (max 1 round)
     6. Creates pull request
+    7. Polls PR status until merged, closed, or timeout
     """
 
     # Maximum number of review rounds to prevent infinite loops
     MAX_REVIEW_ROUNDS = 1
+    # Maximum wait time for PR merge (7 days)
+    MAX_WAIT_HOURS = 168
+    # Poll interval in seconds
+    POLL_INTERVAL_SECONDS = 60
 
     def __init__(self) -> None:
         """Initialize workflow state."""
@@ -286,12 +294,54 @@ This PR implements the changes needed to resolve this issue using autonomous AI 
             ),
         )
 
-        # Return workflow output with complete result
+        # Poll PR status until merged, closed, or timeout
+        max_polls = (self.MAX_WAIT_HOURS * 3600) // self.POLL_INTERVAL_SECONDS
+
+        for _poll_count in range(max_polls):
+            pr_status: FetchPullRequestOutput = await workflow.execute_activity(
+                fetch_pull_request,
+                FetchPullRequestInput(
+                    repo_owner=input.repo_owner,
+                    repo_name=input.repo_name,
+                    pr_number=self._pull_request.number,
+                ),
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=RetryPolicy(
+                    maximum_attempts=3,
+                    initial_interval=timedelta(seconds=1),
+                    maximum_interval=timedelta(seconds=10),
+                ),
+            )
+
+            if pr_status.state == "merged":
+                return IssueResolutionWorkflowOutput(
+                    plan=planning_output.plan,
+                    branch_name=self._branch_name,
+                    commits=self._commits,
+                    pull_request=self._pull_request,
+                    final_state="merged",
+                    merged_at=pr_status.merged_at,
+                    merged_by=pr_status.merged_by,
+                )
+
+            if pr_status.state == "closed":
+                return IssueResolutionWorkflowOutput(
+                    plan=planning_output.plan,
+                    branch_name=self._branch_name,
+                    commits=self._commits,
+                    pull_request=self._pull_request,
+                    final_state="closed",
+                )
+
+            await workflow.sleep(timedelta(seconds=self.POLL_INTERVAL_SECONDS))
+
+        # Timeout reached
         return IssueResolutionWorkflowOutput(
             plan=planning_output.plan,
             branch_name=self._branch_name,
             commits=self._commits,
             pull_request=self._pull_request,
+            final_state="timeout",
         )
 
     def _build_feedback_message(self, feedback: InternalReviewFeedbackOutput) -> str:

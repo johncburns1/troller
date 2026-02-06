@@ -17,6 +17,7 @@ from troller.worker.activities.github_activities import (
     create_feature_branch,
     create_pull_request,
     fetch_issue,
+    fetch_pull_request,
 )
 from troller.worker.activities.implementation_activities import run_implementation_agent
 from troller.worker.activities.planning_activities import run_planning_agent
@@ -57,6 +58,7 @@ async def run_worker(temporal_address: str, task_queue: str) -> None:
                 fetch_issue,
                 create_feature_branch,
                 create_pull_request,
+                fetch_pull_request,
                 run_planning_agent,
                 run_implementation_agent,
                 run_review_agent,

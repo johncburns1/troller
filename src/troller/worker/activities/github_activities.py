@@ -157,6 +157,72 @@ async def create_feature_branch(
             repo_cloner.cleanup(temp_dir)
 
 
+class FetchPullRequestInput(BaseModel):
+    """Input parameters for fetch_pull_request activity.
+
+    Attributes:
+        repo_owner: GitHub repository owner.
+        repo_name: GitHub repository name.
+        pr_number: Pull request number to fetch.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    repo_owner: str = Field(..., description="GitHub repository owner")
+    repo_name: str = Field(..., description="GitHub repository name")
+    pr_number: int = Field(..., description="Pull request number to fetch", gt=0)
+
+
+class FetchPullRequestOutput(BaseModel):
+    """Output from fetch_pull_request activity.
+
+    Attributes:
+        number: Pull request number.
+        url: Full URL to the pull request.
+        state: Current state of the pull request (open, merged, closed).
+        merged_at: ISO timestamp when PR was merged (if merged).
+        merged_by: Username who merged the PR (if merged).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    number: int = Field(..., description="Pull request number", gt=0)
+    url: str = Field(..., description="Full URL to the pull request")
+    state: str = Field(..., description="Current state (open, merged, closed)")
+    merged_at: str | None = Field(None, description="ISO timestamp when PR was merged")
+    merged_by: str | None = Field(None, description="Username who merged the PR")
+
+
+@activity.defn
+async def fetch_pull_request(input: FetchPullRequestInput) -> FetchPullRequestOutput:
+    """Fetch pull request details from GitHub.
+
+    Args:
+        input: Parameters specifying which pull request to fetch.
+
+    Returns:
+        FetchPullRequestOutput with PR data including merge status.
+    """
+    client = GitHubClient()
+    pr = client.get_pull_request(
+        owner=input.repo_owner,
+        repo=input.repo_name,
+        pr_number=input.pr_number,
+    )
+
+    # Convert domain model to activity output
+    # Convert datetime to ISO string for serialization
+    merged_at_str = pr.merged_at.isoformat() if pr.merged_at else None
+
+    return FetchPullRequestOutput(
+        number=pr.number,
+        url=pr.url,
+        state=pr.state,
+        merged_at=merged_at_str,
+        merged_by=pr.merged_by,
+    )
+
+
 class CreatePullRequestInput(BaseModel):
     """Input parameters for create_pull_request activity.
 

@@ -20,6 +20,8 @@ class PullRequest:
         head_sha: SHA of the latest commit in the pull request.
         created_at: When the pull request was created.
         state: Current state of the pull request (open, merged, or closed).
+        merged_at: When the pull request was merged (if merged).
+        merged_by: Username who merged the pull request (if merged).
     """
 
     number: int
@@ -29,3 +31,5 @@ class PullRequest:
     head_sha: str
     created_at: datetime
     state: Literal["open", "merged", "closed"]
+    merged_at: datetime | None = None
+    merged_by: str | None = None
