@@ -58,6 +58,7 @@ class TestPRBodyBuilder:
             technical_approach="Use OAuth2 with PKCE flow for enhanced security. "
             "Store tokens in HTTP-only cookies.",
             testing_strategy="Unit tests for auth logic, integration tests for OAuth flow.",
+            based_on_commit=None,
         )
 
     @pytest.fixture
@@ -68,16 +69,19 @@ class TestPRBodyBuilder:
                 sha="abc1234",
                 message="Add auth configuration module",
                 timestamp=datetime(2026, 1, 15, 11, 0, 0, tzinfo=timezone.utc),
+                internal_review_feedback=None,
             ),
             CommitOutput(
                 sha="def5678",
                 message="Implement OAuth2 flow handler",
                 timestamp=datetime(2026, 1, 15, 11, 30, 0, tzinfo=timezone.utc),
+                internal_review_feedback=None,
             ),
             CommitOutput(
                 sha="ghi9012",
                 message="Add authentication middleware",
                 timestamp=datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
+                internal_review_feedback=None,
             ),
         ]
 
@@ -190,6 +194,7 @@ class TestPRBodyBuilder:
             created_at=datetime(2026, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
             technical_approach=None,
             testing_strategy="Manual testing",
+            based_on_commit=None,
         )
 
         body = builder.build(sample_issue, plan, sample_commits)
@@ -212,6 +217,7 @@ class TestPRBodyBuilder:
             created_at=datetime(2026, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
             technical_approach="Simple approach",
             testing_strategy=None,
+            based_on_commit=None,
         )
 
         body = builder.build(sample_issue, plan, sample_commits)
@@ -245,6 +251,7 @@ class TestPRBodyBuilder:
                 timestamp=datetime(
                     2026, 1, 15 + (i // 24), i % 24, 0, 0, tzinfo=timezone.utc
                 ),
+                internal_review_feedback=None,
             )
             for i in range(20)
         ]
